@@ -265,6 +265,56 @@
       font-size: 0.4rem;
       margin-top: 5px;
     }
+
+    .shop-item {
+      background: #1a1a2e;
+      border: 2px solid #4a4a6a;
+      padding: 10px;
+      width: 120px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .shop-item:hover {
+      border-color: #ffd700;
+    }
+    .shop-item h3 {
+      font-size: 0.5rem;
+      color: #34d399;
+      margin-bottom: 5px;
+    }
+    .shop-item p {
+      font-size: 0.4rem;
+      color: #888;
+      margin: 2px 0;
+    }
+    .shop-item .price {
+      color: #ffd700;
+    }
+
+    .skill-btn {
+      display: block;
+      width: 100%;
+      margin-bottom: 5px;
+      padding: 5px;
+      font-family: inherit;
+      font-size: 0.4rem;
+      background: #2a2a3a;
+      border: 1px solid #4a4a6a;
+      color: #e0e0e0;
+      cursor: pointer;
+      text-align: left;
+    }
+    .skill-btn:hover {
+      background: #3a3a5a;
+    }
+    .skill-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .skill-cost {
+      float: right;
+      color: #7dd3fc;
+    }
     
     .weapon-display {
       margin-top: 8px;
@@ -335,6 +385,14 @@
     </div>
     
     <div class="panel">
+      <h2>▣ 技能</h2>
+      <div id="skill-panel">
+        <div class="stat">
+          <span class="stat-label">灵气</span>
+          <span class="stat-value" id="energy">100/100</span>
+        </div>
+        <div id="skills-list"></div>
+      </div>
       <h2>▣ 日志</h2>
       <div id="log"></div>
     </div>
@@ -342,7 +400,9 @@
   
   <div class="controls">
     <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | 
-    <kbd>R</kbd> 重新开始
+    <kbd>R</kbd> 重新开始 | 
+    <button onclick="saveGame()" style="font-family:inherit; font-size:0.45rem; cursor:pointer;">存档</button>
+    <button onclick="loadGame()" style="font-family:inherit; font-size:0.45rem; cursor:pointer;">读取</button>
   </div>
   
   <!-- 职业选择 -->
@@ -372,6 +432,14 @@
     <h2>💀 身死道消 💀</h2>
     <p id="go-msg" style="color:#666;margin-bottom:15px;font-size:0.5rem"></p>
     <button onclick="showClassSelect()">↻ 轮回重修</button>
+  </div>
+
+  <!-- 商店 -->
+  <div id="shop-modal" class="modal hidden">
+    <h2>🛒 灵气商店</h2>
+    <p style="font-size:0.5rem; margin-bottom:10px;">每层只能购买 1 次</p>
+    <div id="shop-items" class="shop-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
+    <button onclick="closeShop()" style="margin-top:20px; font-family:inherit; padding:10px 20px; cursor:pointer;">离开商店</button>
   </div>
 
   <script>
@@ -422,8 +490,72 @@
     };
     
     const LEVELS = ['筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '大乘期', '渡劫期'];
-    
-    let player, map, enemies, items, floor, logs, playerClass, curse;
+
+    // Audio Module
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audio = {
+      play: (type) => {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        const now = audioCtx.currentTime;
+        if (type === 'attack') {
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } else if (type === 'buy') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.setValueAtTime(800, now + 0.1);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } else if (type === 'skill') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.linearRampToValueAtTime(600, now + 0.3);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        }
+      }
+    };
+
+    const SHOP_ITEMS = [
+      { id: 'sword_shop', name: '新手剑', price: 50, effect: { type: 'atk', value: 5 }, type: 'weapon', desc: 'ATK +5' },
+      { id: 'armor_shop', name: '铁甲', price: 50, effect: { type: 'def', value: 3 }, type: 'armor', desc: 'DEF +3' },
+      { id: 'potion_hp', name: '生命药水', price: 20, effect: { type: 'heal', value: 30 }, type: 'potion', desc: 'HP +30' },
+      { id: 'potion_str', name: '力量药水', price: 30, effect: { type: 'temp_atk', value: 3 }, type: 'potion', desc: 'ATK +3 (本层)' }
+    ];
+
+    const SKILLS = {
+      '医师': [
+        { id: 'acupuncture', name: '针灸', cost: 20, desc: '治疗自己 30 HP' },
+        { id: 'poison_needle', name: '毒针', cost: 15, desc: '敌人中毒，每回合 5 HP' },
+        { id: 'resurrection', name: '还魂', cost: 50, desc: '复活一次 (濒死自动触发)' }
+      ],
+      '炼药师': [
+        { id: 'alchemy', name: '炼丹', cost: 30, desc: '攻击力 +50% (本层)' },
+        { id: 'explosive', name: '炸药', cost: 25, desc: '范围伤害 20' },
+        { id: 'confuse', name: '迷惑', cost: 20, desc: '敌人本回合不攻击' }
+      ],
+      '武痴': [
+        { id: 'break_armor', name: '破甲', cost: 25, desc: '敌人 DEF -50%' },
+        { id: 'combo', name: '连击', cost: 30, desc: '攻击两次' },
+        { id: 'guard', name: '护体', cost: 40, desc: '本回合无敌' }
+      ]
+    };
+
+    let player, map, enemies, items, floor, logs, playerClass, curse, shopAllowed;
     
     function selectClass(cls) {
       playerClass = cls;
@@ -453,11 +585,18 @@
         crit: playerClass === '医师' ? 30 : 0,
         regen: playerClass === '炼药师' ? 15 : 0,
         armorPen: playerClass === '武痴' ? 2 : 0,
-        weapon: 'fist'
+        weapon: 'fist',
+        energy: 100,
+        maxEnergy: 100,
+        confused: false,
+        guard: false,
+        tempBuffs: [],
+        poison: 0
       };
       
       floor = 1;
       curse = null;
+      shopAllowed = true;
       enemies = [];
       items = [];
       logs = [];
@@ -469,6 +608,7 @@
       spawnItems();
       log('☯ 欢迎来到阴阳道！', 'log-item');
       log('探索修仙世界，击败旱魃飞升！', 'log-item');
+      renderSkills();
       updateUI();
     }
     
@@ -696,7 +836,16 @@
       
       // 武器攻击力
       const weapon = WEAPONS[player.weapon];
-      const baseAtk = player.atk;
+      let baseAtk = player.atk;
+      
+      // 临时攻击力加成
+      if (player.tempBuffs) {
+        player.tempBuffs.forEach(buff => {
+          if (buff.type === 'atk_mult') {
+            baseAtk = Math.floor(baseAtk * (1 + buff.value));
+          }
+        });
+      }
       
       // 武痴破甲
       let def = Math.max(0, enemy.def - player.armorPen);
@@ -716,6 +865,7 @@
       }
       
       enemy.hp -= dmg;
+      audio.play('attack');
       
       if (enemy.hp <= 0) {
         log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win');
@@ -743,7 +893,20 @@
     }
     
     function enemyTurn() {
+      if (player.confused) {
+        player.confused = false;
+        log('◈ 敌人被迷惑，跳过攻击！', 'log-skill');
+        return;
+      }
+
       for (const enemy of enemies) {
+        // Poison damage
+        if (enemy.poison > 0) {
+          enemy.hp -= enemy.poison;
+          log(`▸ ${enemy.name}中毒，-${enemy.poison}气血`, 'log-skill');
+          enemy.poison--;
+        }
+
         const dx = Math.sign(player.x - enemy.x);
         const dy = Math.sign(player.y - enemy.y);
         
@@ -751,8 +914,15 @@
         if (dist === 1) {
           let dmg = Math.max(1, enemy.atk - player.def);
           if (curse === '血光') dmg = Math.floor(dmg * 1.2);
-          player.hp -= dmg;
-          log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage');
+          
+          if (player.guard) {
+            dmg = 0;
+            log(`▸ ${enemy.name}攻击，被护体格挡！`, 'log-skill');
+            player.guard = false; // Consume guard
+          } else {
+            player.hp -= dmg;
+            log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage');
+          }
           
           if (player.hp <= 0) {
             gameOver();
@@ -769,7 +939,212 @@
       }
     }
     
+    function renderSkills() {
+      const container = document.getElementById('skills-list');
+      container.innerHTML = '';
+      const skills = SKILLS[player.class];
+      skills.forEach(skill => {
+        const btn = document.createElement('button');
+        btn.className = 'skill-btn';
+        btn.id = `skill-${skill.id}`;
+        btn.innerHTML = `${skill.name} <span class="skill-cost">${skill.cost}</span><br><span style="color:#888">${skill.desc}</span>`;
+        btn.onclick = () => castSkill(skill.id);
+        container.appendChild(btn);
+      });
+    }
+
+    function castSkill(skillId) {
+      const skills = SKILLS[player.class];
+      const skill = skills.find(s => s.id === skillId);
+      if (!skill) return;
+
+      if (player.energy < skill.cost) {
+        log('灵气不足！', 'log-curse');
+        return;
+      }
+
+      player.energy -= skill.cost;
+      audio.play('skill');
+
+      // Skill effects
+      if (skill.id === 'acupuncture') {
+        player.hp = Math.min(player.maxHp, player.hp + 30);
+        log('◈ 针灸治疗，恢复30气血！', 'log-heal');
+      } else if (skill.id === 'poison_needle') {
+        // Apply poison to nearest enemy
+        const nearest = getNearestEnemy();
+        if (nearest) {
+          nearest.poison = 5; // 5 damage per turn
+          log(`◈ 毒针命中${nearest.name}！`, 'log-skill');
+        }
+      } else if (skill.id === 'alchemy') {
+        if (!player.tempBuffs) player.tempBuffs = [];
+        player.tempBuffs.push({ type: 'atk_mult', value: 0.5 });
+        log('◈ 炼丹生效，攻击力提升50%！', 'log-skill');
+      } else if (skill.id === 'explosive') {
+        enemies.forEach(e => {
+          const dist = Math.abs(player.x - e.x) + Math.abs(player.y - e.y);
+          if (dist <= 3) {
+            e.hp -= 20;
+            log(`◈ 炸药伤害${e.name}！`, 'log-skill');
+          }
+        });
+        enemies = enemies.filter(e => e.hp > 0);
+      } else if (skill.id === 'confuse') {
+        player.confused = true;
+        log('◈ 迷惑敌人，本回合不攻击！', 'log-skill');
+      } else if (skill.id === 'break_armor') {
+        const nearest = getNearestEnemy();
+        if (nearest) {
+          nearest.def = Math.floor(nearest.def * 0.5);
+          log(`◈ 破甲${nearest.name}！`, 'log-skill');
+        }
+      } else if (skill.id === 'combo') {
+        const nearest = getNearestEnemy();
+        if (nearest) {
+          // Attack twice (simplified)
+          let dmg = Math.max(1, player.atk - nearest.def);
+          nearest.hp -= dmg;
+          nearest.hp -= dmg;
+          log(`◈ 连击${nearest.name}！`, 'log-skill');
+          if (nearest.hp <= 0) {
+            log(`◈ 击败${nearest.name}！获得${nearest.exp}经验、${nearest.gold}灵气！`, 'log-win');
+            player.exp += nearest.exp;
+            player.gold += nearest.gold;
+            enemies = enemies.filter(e => e !== nearest);
+          }
+        }
+      } else if (skill.id === 'guard') {
+        player.guard = true;
+        log('◈ 护体开启，本回合无敌！', 'log-skill');
+      }
+
+      updateUI();
+    }
+
+    function getNearestEnemy() {
+      let nearest = null;
+      let minDist = Infinity;
+      for (const enemy of enemies) {
+        const dist = Math.abs(player.x - enemy.x) + Math.abs(player.y - enemy.y);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = enemy;
+        }
+      }
+      return nearest;
+    }
+
     function nextFloor() {
+      shopAllowed = true;
+      openShop();
+    }
+    
+    function gameOver() {
+      const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
+      document.getElementById('go-msg').innerText = `第${floor}层 ${realm} | 灵气${player.gold}`;
+      document.getElementById('game-over').classList.remove('hidden');
+      log('✦ 身死道消...', 'log-death');
+    }
+    
+    function log(msg, cls = '') {
+      logs.unshift({ msg, cls });
+      if (logs.length > 30) logs.pop();
+      
+      const logEl = document.getElementById('log');
+      logEl.innerHTML = logs.map(l => `<div class="log-entry ${l.cls}">${l.msg}</div>`).join('');
+    }
+    
+    function updateWeaponDisplay() {
+      const weapon = WEAPONS[player.weapon];
+      document.getElementById('weapon-icon').innerText = weapon.icon;
+      document.getElementById('weapon-name').innerText = weapon.name;
+      document.getElementById('weapon-name').className = 'weapon-name rarity-' + weapon.rarity;
+    }
+    
+    function openShop() {
+      if (!shopAllowed) {
+        log('已离开商店', 'log-item');
+        nextFloorAfterShop();
+        return;
+      }
+      document.getElementById('shop-modal').classList.remove('hidden');
+      renderShop();
+    }
+
+    function closeShop() {
+      document.getElementById('shop-modal').classList.add('hidden');
+      shopAllowed = false;
+      nextFloorAfterShop();
+    }
+
+    function renderShop() {
+      const container = document.getElementById('shop-items');
+      container.innerHTML = '';
+      SHOP_ITEMS.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'shop-item';
+        div.onclick = () => buyItem(item.id);
+        div.innerHTML = `
+          <h3>${item.name}</h3>
+          <p>${item.desc}</p>
+          <p class="price">${item.price} 灵气</p>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function buyItem(itemId) {
+      const item = SHOP_ITEMS.find(i => i.id === itemId);
+      if (!item) return;
+      
+      if (player.gold < item.price) {
+        log('灵气不足！', 'log-curse');
+        return;
+      }
+
+      player.gold -= item.price;
+      
+      if (item.effect.type === 'atk') {
+        player.atk += item.effect.value;
+        log(`购买 ${item.name}，攻击+${item.effect.value}`, 'log-item');
+      } else if (item.effect.type === 'def') {
+        player.def += item.effect.value;
+        log(`购买 ${item.name}，防御+${item.effect.value}`, 'log-item');
+      } else if (item.effect.type === 'heal') {
+        player.hp = Math.min(player.maxHp, player.hp + item.effect.value);
+        log(`购买 ${item.name}，恢复${item.effect.value}气血`, 'log-heal');
+      } else if (item.effect.type === 'temp_atk') {
+        // Apply temp buff logic here (simplified: just add ATK for now, maybe reset on floor change)
+        // For now, let's just add permanent ATK as a simple implementation
+        // Or better, track temp buffs in player object
+        if (!player.tempBuffs) player.tempBuffs = [];
+        player.tempBuffs.push({ type: 'atk', value: item.effect.value });
+        player.atk += item.effect.value;
+        log(`饮用 ${item.name}，攻击+${item.effect.value} (本层)`, 'log-item');
+      }
+      
+      updateUI();
+      renderShop();
+      audio.play('buy');
+    }
+
+    function nextFloorAfterShop() {
+      // Reset temp buffs
+      if (player.tempBuffs) {
+        player.tempBuffs.forEach(buff => {
+          if (buff.type === 'atk') player.atk -= buff.value;
+        });
+        player.tempBuffs = [];
+      }
+      
+      // Reset skill statuses
+      player.confused = false;
+      player.guard = false;
+      
+      // Regenerate energy
+      player.energy = Math.min(player.maxEnergy, player.energy + 20);
+      
       floor++;
       
       if (player.regen > 0) {
@@ -802,29 +1177,46 @@
       spawnItems();
       updateUI();
     }
-    
-    function gameOver() {
-      const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
-      document.getElementById('go-msg').innerText = `第${floor}层 ${realm} | 灵气${player.gold}`;
-      document.getElementById('game-over').classList.remove('hidden');
-      log('✦ 身死道消...', 'log-death');
+
+    function saveGame() {
+      const saveData = {
+        player: player,
+        floor: floor,
+        curse: curse,
+        shopAllowed: shopAllowed
+      };
+      localStorage.setItem('rogueDungeonSave', JSON.stringify(saveData));
+      log('游戏已保存！', 'log-item');
+      audio.play('buy'); // Use buy sound for save
     }
-    
-    function log(msg, cls = '') {
-      logs.unshift({ msg, cls });
-      if (logs.length > 30) logs.pop();
+
+    function loadGame() {
+      const saveData = localStorage.getItem('rogueDungeonSave');
+      if (!saveData) {
+        log('没有找到存档！', 'log-curse');
+        return;
+      }
       
-      const logEl = document.getElementById('log');
-      logEl.innerHTML = logs.map(l => `<div class="log-entry ${l.cls}">${l.msg}</div>`).join('');
+      const data = JSON.parse(saveData);
+      player = data.player;
+      floor = data.floor;
+      curse = data.curse;
+      shopAllowed = data.shopAllowed;
+      
+      // Regenerate floor state
+      generateMap();
+      spawnPlayer();
+      spawnEnemies();
+      spawnItems();
+      
+      // Restore UI
+      renderSkills();
+      updateUI();
+      
+      log('游戏已读取！', 'log-item');
+      audio.play('buy');
     }
-    
-    function updateWeaponDisplay() {
-      const weapon = WEAPONS[player.weapon];
-      document.getElementById('weapon-icon').innerText = weapon.icon;
-      document.getElementById('weapon-name').innerText = weapon.name;
-      document.getElementById('weapon-name').className = 'weapon-name rarity-' + weapon.rarity;
-    }
-    
+
     function updateUI() {
       const hpPercent = (player.hp / player.maxHp) * 100;
       document.getElementById('hp-fill').style.width = hpPercent + '%';
@@ -837,6 +1229,18 @@
       document.getElementById('defense').innerText = player.def;
       document.getElementById('gold').innerText = player.gold;
       document.getElementById('floor').innerText = floor;
+      document.getElementById('energy').innerText = `${player.energy}/${player.maxEnergy}`;
+      
+      // Update skill buttons state
+      if (player.class) {
+        const skills = SKILLS[player.class];
+        skills.forEach(skill => {
+          const btn = document.getElementById(`skill-${skill.id}`);
+          if (btn) {
+            btn.disabled = player.energy < skill.cost;
+          }
+        });
+      }
       
       const curseEl = document.getElementById('curse');
       if (curse) {
