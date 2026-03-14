@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>☯ 阴阳道 - 像素版</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      image-rendering: pixelated;
+    }
+    
+    body {
+      background: #0f0f1a;
+      color: #e0e0e0;
+      font-family: 'Press Start 2P', cursive;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 15px;
+      background-image: 
+        linear-gradient(#1a1a2e 1px, transparent 1px),
+        linear-gradient(90deg, #1a1a2e 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    
+    h1 {
+      color: #ffd700;
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+      text-shadow: 4px 4px 0 #8b0000;
+      letter-spacing: 2px;
+    }
+    
+    .game-container {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    #game {
+      background: #000;
+      border: 4px solid #4a4a6a;
+      padding: 8px;
+      font-size: 14px;
+      line-height: 1.3;
+      white-space: pre;
+      box-shadow: 
+        inset 0 0 20px rgba(0,0,0,0.8),
+        0 0 0 4px #2a2a3a;
+    }
+    
+    .panel {
+      background: #1a1a2e;
+      border: 4px solid #4a4a6a;
+      padding: 12px;
+      min-width: 180px;
+      box-shadow: 0 4px 0 #0a0a15;
+    }
+    
+    .panel h2 {
+      color: #7dd3fc;
+      font-size: 0.6rem;
+      margin-bottom: 10px;
+      border-bottom: 2px dashed #3a3a5a;
+      padding-bottom: 5px;
+    }
+    
+    .stat { 
+      margin: 6px 0; 
+      font-size: 0.5rem;
+    }
+    .stat-label { color: #888; }
+    .stat-value { color: #fff; float: right; }
+    
+    .hp-bar {
+      background: #0a0a15;
+      height: 16px;
+      margin: 8px 0;
+      position: relative;
+      border: 2px solid #3a3a5a;
+    }
+    
+    .hp-fill {
+      background: linear-gradient(180deg, #ff6b6b 0%, #c0392b 100%);
+      height: 100%;
+      transition: width 0.2s;
+    }
+    
+    .hp-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 8px;
+      color: #fff;
+    }
+    
+    #log {
+      height: 120px;
+      overflow-y: auto;
+      font-size: 0.45rem;
+      border-top: 2px dashed #3a3a5a;
+      margin-top: 8px;
+      padding-top: 8px;
+      line-height: 1.6;
+    }
+    
+    .log-entry { margin: 2px 0; }
+    .log-combat { color: #f97316; }
+    .log-item { color: #ffd700; }
+    .log-heal { color: #34d399; }
+    .log-death { color: #ef4444; }
+    .log-level { color: #a78bfa; }
+    .log-win { color: #34d399; }
+    .log-skill { color: #c084fc; }
+    .log-curse { color: #f43f5e; }
+    .log-damage { color: #ff6b6b; }
+    
+    .controls {
+      margin-top: 15px;
+      color: #666;
+      font-size: 0.45rem;
+    }
+    
+    .controls kbd {
+      background: #2a2a3a;
+      padding: 3px 6px;
+      border: 2px solid #4a4a6a;
+      color: #7dd3fc;
+      margin: 0 2px;
+    }
+    
+    #inventory {
+      list-style: none;
+      font-size: 0.45rem;
+    }
+    
+    #inventory li {
+      padding: 2px 0;
+      color: #ffd700;
+    }
+    
+    .weapon-slot {
+      display: inline-block;
+      margin: 2px;
+      padding: 2px 4px;
+      background: #2a2a3a;
+      border: 1px solid #4a4a6a;
+    }
+    
+    .rarity-common { color: #aaa; }
+    .rarity-uncommon { color: #34d399; }
+    .rarity-rare { color: #7dd3fc; }
+    .rarity-epic { color: #a855f7; }
+    
+    .modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    
+    .modal h2 {
+      color: #ffd700;
+      font-size: 1rem;
+      margin-bottom: 20px;
+      text-shadow: 3px 3px 0 #8b0000;
+    }
+    
+    .class-options {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .class-card {
+      background: #1a1a2e;
+      border: 4px solid #4a4a6a;
+      padding: 15px;
+      width: 160px;
+      cursor: pointer;
+      transition: all 0.1s;
+      box-shadow: 0 4px 0 #0a0a15;
+    }
+    
+    .class-card:hover {
+      border-color: #ffd700;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 0 #0a0a15;
+    }
+    
+    .class-card h3 {
+      color: #34d399;
+      font-size: 0.6rem;
+      margin-bottom: 8px;
+    }
+    
+    .class-card .desc {
+      color: #888;
+      font-size: 0.4rem;
+      margin: 4px 0;
+      line-height: 1.4;
+    }
+    
+    .class-card .skill {
+      color: #c084fc;
+      font-size: 0.4rem;
+    }
+    
+    .game-over {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    
+    .game-over h2 {
+      font-size: 1.2rem;
+      color: #ef4444;
+      margin-bottom: 15px;
+      text-shadow: 3px 3px 0 #8b0000;
+    }
+    
+    .game-over button {
+      font-family: 'Press Start 2P', cursive;
+      font-size: 0.5rem;
+      padding: 10px 20px;
+      background: #7dd3fc;
+      border: none;
+      cursor: pointer;
+      color: #0a0a0f;
+      box-shadow: 0 4px 0 #3a7a9a;
+    }
+    
+    .game-over button:hover {
+      background: #38bdf8;
+    }
+    
+    .game-over button:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #3a7a9a;
+    }
+    
+    .hidden { display: none !important; }
+    
+    .curse-badge {
+      color: #f43f5e;
+      font-size: 0.4rem;
+      margin-top: 5px;
+    }
+    
+    .weapon-display {
+      margin-top: 8px;
+      padding: 5px;
+      background: #0a0a15;
+      border: 2px solid #3a3a5a;
+    }
+    
+    .weapon-icon {
+      font-size: 1rem;
+      display: block;
+      text-align: center;
+      margin-bottom: 3px;
+    }
+    
+    .weapon-name {
+      font-size: 0.4rem;
+      text-align: center;
+      color: #ffd700;
+    }
+  </style>
+</head>
+<body>
+  <h1>☯ 阴阳道</h1>
+  
+  <div class="game-container">
+    <div id="game"></div>
+    
+    <div class="panel">
+      <h2>▣ 状态</h2>
+      <div class="hp-bar">
+        <div class="hp-fill" id="hp-fill"></div>
+        <span class="hp-text" id="hp-text">100/100</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">境界</span>
+        <span class="stat-value" id="level">筑基期</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">经验</span>
+        <span class="stat-value" id="exp">0/100</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">攻击</span>
+        <span class="stat-value" id="attack">10</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">防御</span>
+        <span class="stat-value" id="defense">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">灵气</span>
+        <span class="stat-value" id="gold">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">层数</span>
+        <span class="stat-value" id="floor">1</span>
+      </div>
+      <div class="curse-badge" id="curse"></div>
+      
+      <div class="weapon-display">
+        <span class="weapon-icon" id="weapon-icon">✊</span>
+        <span class="weapon-name" id="weapon-name">徒手</span>
+      </div>
+      
+      <h2>▣ 储物袋</h2>
+      <ul id="inventory"></ul>
+    </div>
+    
+    <div class="panel">
+      <h2>▣ 日志</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+  
+  <div class="controls">
+    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | 
+    <kbd>R</kbd> 重新开始
+  </div>
+  
+  <!-- 职业选择 -->
+  <div id="class-select" class="modal">
+    <h2>✦ 选择修炼方向 ✦</h2>
+    <div class="class-options">
+      <div class="class-card" onclick="selectClass('医师')">
+        <h3>🧑‍⚕️ 医师</h3>
+        <div class="desc">HP+20 防御+2</div>
+        <div class="skill">针灸暴击+30%</div>
+      </div>
+      <div class="class-card" onclick="selectClass('炼药师')">
+        <h3>⚗️ 炼药师</h3>
+        <div class="desc">攻击+3 HP-10</div>
+        <div class="skill">每层回复15HP</div>
+      </div>
+      <div class="class-card" onclick="selectClass('武痴')">
+        <h3>⚔️ 武痴</h3>
+        <div class="desc">攻击+5 防御-1</div>
+        <div class="skill">破甲穿透+2</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 游戏结束 -->
+  <div id="game-over" class="game-over hidden">
+    <h2>💀 身死道消 💀</h2>
+    <p id="go-msg" style="color:#666;margin-bottom:15px;font-size:0.5rem"></p>
+    <button onclick="showClassSelect()">↻ 轮回重修</button>
+  </div>
+
+  <script>
+    const WIDTH = 25;
+    const HEIGHT = 15;
+    
+    // 武器系统
+    const WEAPONS = {
+      'fist': { name: '徒手', icon: '✊', atk: 0, rarity: 'common' },
+      'needle': { name: '银针', icon: '📍', atk: 5, rarity: 'common' },
+      'gourd': { name: '葫芦', icon: '🍶', atk: 8, rarity: 'uncommon' },
+      'sword': { name: '太极剑', icon: '⚔️', atk: 12, rarity: 'rare' },
+      '拂尘': { name: '拂尘', icon: '🧹', atk: 10, rarity: 'uncommon' },
+      '丹炉': { name: '炼丹炉', icon: '🔥', atk: 15, rarity: 'epic' }
+    };
+    
+    const WEAPON_ORDER = ['fist', 'needle', 'gourd', 'sword', '拂尘', '丹炉'];
+    
+    const COLORS = {
+      '#': '#4a4a6a',
+      '.': '#1a1a2e',
+      '@': '#34d399',
+      'z': '#84cc16',
+      'd': '#f97316',
+      's': '#e2e8f0',
+      'D': '#a855f7',
+      '!': '#34d399',
+      '$': '#ffd700',
+      '>': '#7dd3fc',
+      'X': '#ef4444'
+    };
+    
+    const ENEMIES = {
+      'z': { name: '僵尸', hp: 25, atk: 6, def: 0, exp: 15, gold: 8 },
+      'd': { name: '毒虫', hp: 35, atk: 10, def: 3, exp: 25, gold: 15 },
+      's': { name: '煞尸', hp: 50, atk: 15, def: 6, exp: 50, gold: 30 },
+      'D': { name: '旱魃', hp: 120, atk: 25, def: 12, exp: 300, gold: 200 }
+    };
+    
+    const ITEMS = {
+      '!': { name: '九转还魂丹', type: 'heal', value: 50 },
+      '$': { name: '灵气', type: 'gold', value: 15 },
+      'needle': { name: '银针', type: 'weapon', weaponKey: 'needle' },
+      'gourd': { name: '葫芦', type: 'weapon', weaponKey: 'gourd' },
+      'sword': { name: '太极剑', type: 'weapon', weaponKey: 'sword' },
+      '拂尘': { name: '拂尘', type: 'weapon', weaponKey: '拂尘' },
+      '丹炉': { name: '炼丹炉', type: 'weapon', weaponKey: '丹炉' }
+    };
+    
+    const LEVELS = ['筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '大乘期', '渡劫期'];
+    
+    let player, map, enemies, items, floor, logs, playerClass, curse;
+    
+    function selectClass(cls) {
+      playerClass = cls;
+      document.getElementById('class-select').classList.add('hidden');
+      initGame();
+    }
+    
+    function showClassSelect() {
+      document.getElementById('game-over').classList.add('hidden');
+      document.getElementById('class-select').classList.remove('hidden');
+    }
+    
+    function initGame() {
+      const baseStats = {
+        '医师': { hp: 120, maxHp: 120, atk: 10, def: 2 },
+        '炼药师': { hp: 90, maxHp: 90, atk: 13, def: 0 },
+        '武痴': { hp: 110, maxHp: 110, atk: 15, def: -1 }
+      };
+      
+      const stats = baseStats[playerClass];
+      player = { 
+        x: 1, y: 1, 
+        hp: stats.hp, maxHp: stats.maxHp, 
+        atk: stats.atk, def: stats.def, 
+        gold: 0, exp: 0, level: 0, expTo: 100,
+        class: playerClass,
+        crit: playerClass === '医师' ? 30 : 0,
+        regen: playerClass === '炼药师' ? 15 : 0,
+        armorPen: playerClass === '武痴' ? 2 : 0,
+        weapon: 'fist'
+      };
+      
+      floor = 1;
+      curse = null;
+      enemies = [];
+      items = [];
+      logs = [];
+      
+      document.getElementById('game-over').classList.add('hidden');
+      generateMap();
+      spawnPlayer();
+      spawnEnemies();
+      spawnItems();
+      log('☯ 欢迎来到阴阳道！', 'log-item');
+      log('探索修仙世界，击败旱魃飞升！', 'log-item');
+      updateUI();
+    }
+    
+    function generateMap() {
+      map = [];
+      for (let y = 0; y < HEIGHT; y++) {
+        map[y] = [];
+        for (let x = 0; x < WIDTH; x++) {
+          map[y][x] = '#';
+        }
+      }
+      
+      const rooms = [];
+      const numRooms = 5 + Math.floor(Math.random() * 4);
+      
+      for (let i = 0; i < numRooms; i++) {
+        const w = 4 + Math.floor(Math.random() * 4);
+        const h = 3 + Math.floor(Math.random() * 3);
+        const x = 1 + Math.floor(Math.random() * (WIDTH - w - 2));
+        const y = 1 + Math.floor(Math.random() * (HEIGHT - h - 2));
+        
+        rooms.push({ x, y, w, h });
+        
+        for (let ry = y; ry < y + h; ry++) {
+          for (let rx = x; rx < x + w; rx++) {
+            map[ry][rx] = '.';
+          }
+        }
+      }
+      
+      if (curse && Math.random() < 0.3) {
+        const room = rooms[Math.floor(Math.random() * rooms.length)];
+        map[Math.floor(room.y + room.h/2)][Math.floor(room.x + room.w/2)] = 'X';
+      }
+      
+      for (let i = 1; i < rooms.length; i++) {
+        const r1 = rooms[i - 1];
+        const r2 = rooms[i];
+        const x1 = Math.floor(r1.x + r1.w / 2);
+        const y1 = Math.floor(r1.y + r1.h / 2);
+        const x2 = Math.floor(r2.x + r2.w / 2);
+        const y2 = Math.floor(r2.y + r2.h / 2);
+        
+        const hx1 = Math.min(x1, x2), hx2 = Math.max(x1, x2);
+        for (let x = hx1; x <= hx2; x++) {
+          if (y1 >= 0 && y1 < HEIGHT) map[y1][x] = '.';
+        }
+        
+        const hy1 = Math.min(y1, y2), hy2 = Math.max(y1, y2);
+        for (let y = hy1; y <= hy2; y++) {
+          if (y >= 0 && y < HEIGHT) map[y][x2] = '.';
+        }
+      }
+      
+      const lastRoom = rooms[rooms.length - 1];
+      map[Math.floor(lastRoom.y + lastRoom.h / 2)][Math.floor(lastRoom.x + lastRoom.w / 2)] = '>';
+    }
+    
+    function spawnPlayer() {
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          if (map[y][x] === '.') {
+            player.x = x;
+            player.y = y;
+            return;
+          }
+        }
+      }
+    }
+    
+    function spawnEnemies() {
+      enemies = [];
+      const numEnemies = 3 + floor * 2;
+      
+      for (let i = 0; i < numEnemies; i++) {
+        let x, y;
+        do {
+          x = Math.floor(Math.random() * WIDTH);
+          y = Math.floor(Math.random() * HEIGHT);
+        } while (map[y][x] !== '.' || (x === player.x && y === player.y));
+        
+        let type;
+        if (floor >= 3 && Math.random() < 0.2) type = 'D';
+        else if (floor >= 2 && Math.random() < 0.4) type = 's';
+        else if (Math.random() < 0.6) type = 'd';
+        else type = 'z';
+        
+        const data = ENEMIES[type];
+        enemies.push({
+          x, y, type,
+          name: data.name,
+          hp: data.hp + floor * 5,
+          maxHp: data.hp + floor * 5,
+          atk: data.atk + floor * 2,
+          def: data.def,
+          exp: data.exp,
+          gold: data.gold
+        });
+      }
+    }
+    
+    function spawnItems() {
+      items = [];
+      const numItems = 2 + Math.floor(Math.random() * 3);
+      
+      for (let i = 0; i < numItems; i++) {
+        let x, y;
+        do {
+          x = Math.floor(Math.random() * WIDTH);
+          y = Math.floor(Math.random() * HEIGHT);
+        } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y));
+        
+        const rand = Math.random();
+        if (rand < 0.2) {
+          items.push({ x, y, ...ITEMS['!'] });
+        } else if (rand < 0.4) {
+          items.push({ x, y, ...ITEMS['$'] });
+        } else if (rand < 0.55) {
+          items.push({ x, y, ...ITEMS['needle'] });
+        } else if (rand < 0.7) {
+          items.push({ x, y, ...ITEMS['gourd'] });
+        } else if (rand < 0.85) {
+          items.push({ x, y, ...ITEMS['拂尘'] });
+        } else {
+          items.push({ x, y, ...ITEMS['sword'] });
+        }
+      }
+    }
+    
+    function getChar(x, y) {
+      if (x === player.x && y === player.y) return '@';
+      const enemy = enemies.find(e => e.x === x && e.y === y);
+      if (enemy) return enemy.type;
+      const item = items.find(i => i.x === x && i.y === y);
+      if (item) {
+        if (item.type === 'heal') return '!';
+        if (item.type === 'gold') return '$';
+        return item.name.charAt(0);
+      }
+      if (map[y][x] === '>') return '>';
+      if (map[y][x] === 'X') return 'X';
+      return map[y][x];
+    }
+    
+    function render() {
+      let output = '';
+      for (let y = 0; y < HEIGHT; y++) {
+        for (let x = 0; x < WIDTH; x++) {
+          const char = getChar(x, y);
+          const color = COLORS[char] || '#fff';
+          output += `<span style="color:${color}">${char}</span>`;
+        }
+        output += '\n';
+      }
+      document.getElementById('game').innerHTML = output;
+    }
+    
+    function move(dx, dy) {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      
+      if (nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT) return;
+      if (map[ny][nx] === '#') return;
+      
+      // 祭坛
+      if (map[ny][nx] === 'X') {
+        if (curse) {
+          curse = null;
+          log('✦ 祭坛祈福，诅咒解除！', 'log-heal');
+        } else {
+          log('✦ 太乙祭坛，可解除诅咒', 'log-item');
+        }
+      }
+      
+      // 敌人 - 攻击
+      const enemy = enemies.find(e => e.x === nx && e.y === ny);
+      if (enemy) {
+        attack(enemy);
+        enemyTurn();
+        updateUI();
+        return;
+      }
+      
+      // 出口
+      if (map[ny][nx] === '>') {
+        nextFloor();
+        return;
+      }
+      
+      // 移动
+      player.x = nx;
+      player.y = ny;
+      
+      // 拾取
+      const itemIdx = items.findIndex(i => i.x === nx && i.y === ny);
+      if (itemIdx !== -1) {
+        const item = items[itemIdx];
+        if (item.type === 'heal') {
+          player.hp = Math.min(player.maxHp, player.hp + item.value);
+          log(`◈ 服用${item.name}，恢复${item.value}气血！`, 'log-heal');
+        } else if (item.type === 'gold') {
+          player.gold += item.value;
+          log(`◈ 吸纳${item.value}点灵气！`, 'log-item');
+        } else if (item.type === 'weapon') {
+          const weapon = WEAPONS[item.weaponKey];
+          player.atk += weapon.atk;
+          player.weapon = item.weaponKey;
+          updateWeaponDisplay();
+          log(`◈ 获得${weapon.icon}${weapon.name}，攻击+${weapon.atk}！`, 'log-item');
+        }
+        items.splice(itemIdx, 1);
+      }
+      
+      enemyTurn();
+      updateUI();
+    }
+    
+    function attack(enemy) {
+      let isCrit = false;
+      
+      // 医师暴击
+      if (player.crit > 0 && Math.random() * 100 < player.crit) {
+        isCrit = true;
+      }
+      
+      // 武器攻击力
+      const weapon = WEAPONS[player.weapon];
+      const baseAtk = player.atk;
+      
+      // 武痴破甲
+      let def = Math.max(0, enemy.def - player.armorPen);
+      let dmg = Math.max(1, baseAtk - def);
+      
+      // 武器特效（丹炉暴击）
+      if (player.weapon === '丹炉' && Math.random() < 0.2) {
+        dmg = Math.floor(dmg * 1.5);
+        log(`◈ ${weapon.icon}暴击！`, 'log-skill');
+      }
+      
+      if (isCrit) {
+        dmg = Math.floor(dmg * 1.5);
+        log(`◈ ✦针灸暴击✦ 对${enemy.name}造成${dmg}伤害！`, 'log-skill');
+      } else {
+        log(`◈ 攻击${enemy.name}，${dmg}伤害！`, 'log-combat');
+      }
+      
+      enemy.hp -= dmg;
+      
+      if (enemy.hp <= 0) {
+        log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win');
+        player.exp += enemy.exp;
+        player.gold += enemy.gold;
+        enemies = enemies.filter(e => e !== enemy);
+        
+        if (player.exp >= player.expTo) {
+          levelUp();
+        }
+      }
+    }
+    
+    function levelUp() {
+      player.level++;
+      player.exp -= player.expTo;
+      player.expTo = Math.floor(player.expTo * 1.5);
+      player.maxHp += 25;
+      player.hp = player.maxHp;
+      player.atk += 4;
+      player.def += 2;
+      
+      const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
+      log(`◈ ✦突破境界✦ 晋升${realm}！`, 'log-level');
+    }
+    
+    function enemyTurn() {
+      for (const enemy of enemies) {
+        const dx = Math.sign(player.x - enemy.x);
+        const dy = Math.sign(player.y - enemy.y);
+        
+        const dist = Math.abs(player.x - enemy.x) + Math.abs(player.y - enemy.y);
+        if (dist === 1) {
+          let dmg = Math.max(1, enemy.atk - player.def);
+          if (curse === '血光') dmg = Math.floor(dmg * 1.2);
+          player.hp -= dmg;
+          log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage');
+          
+          if (player.hp <= 0) {
+            gameOver();
+            return;
+          }
+        } else if (dist <= 6) {
+          let nx = enemy.x + dx;
+          let ny = enemy.y + dy;
+          if (map[ny][nx] === '.' && !enemies.some(e => e.x === nx && e.y === ny) && !(nx === player.x && ny === player.y)) {
+            enemy.x = nx;
+            enemy.y = ny;
+          }
+        }
+      }
+    }
+    
+    function nextFloor() {
+      floor++;
+      
+      if (player.regen > 0) {
+        player.hp = Math.min(player.maxHp, player.hp + player.regen);
+        log(`◈ 炼丹生效，回复${player.regen}气血！`, 'log-skill');
+      }
+      
+      if (floor > 1 && !curse && Math.random() < 0.25) {
+        const curses = {
+          '血光': '受伤+20%',
+          '灵气流失': '灵气-30%',
+          '道心不稳': '经验+50%'
+        };
+        const curseNames = Object.keys(curses);
+        curse = curseNames[Math.floor(Math.random() * curseNames.length)];
+        log(`⚠️ ${curse}：${curses[curse]}`, 'log-curse');
+        
+        if (curse === '灵气流失') {
+          player.gold = Math.floor(player.gold * 0.7);
+        }
+        if (curse === '道心不稳') {
+          player.expTo = Math.floor(player.expTo * 1.5);
+        }
+      }
+      
+      log(`▸ 进入第${floor}层...`, 'log-level');
+      generateMap();
+      spawnPlayer();
+      spawnEnemies();
+      spawnItems();
+      updateUI();
+    }
+    
+    function gameOver() {
+      const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
+      document.getElementById('go-msg').innerText = `第${floor}层 ${realm} | 灵气${player.gold}`;
+      document.getElementById('game-over').classList.remove('hidden');
+      log('✦ 身死道消...', 'log-death');
+    }
+    
+    function log(msg, cls = '') {
+      logs.unshift({ msg, cls });
+      if (logs.length > 30) logs.pop();
+      
+      const logEl = document.getElementById('log');
+      logEl.innerHTML = logs.map(l => `<div class="log-entry ${l.cls}">${l.msg}</div>`).join('');
+    }
+    
+    function updateWeaponDisplay() {
+      const weapon = WEAPONS[player.weapon];
+      document.getElementById('weapon-icon').innerText = weapon.icon;
+      document.getElementById('weapon-name').innerText = weapon.name;
+      document.getElementById('weapon-name').className = 'weapon-name rarity-' + weapon.rarity;
+    }
+    
+    function updateUI() {
+      const hpPercent = (player.hp / player.maxHp) * 100;
+      document.getElementById('hp-fill').style.width = hpPercent + '%';
+      document.getElementById('hp-text').innerText = `${player.hp}/${player.maxHp}`;
+      
+      const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
+      document.getElementById('level').innerText = realm;
+      document.getElementById('exp').innerText = `${player.exp}/${player.expTo}`;
+      document.getElementById('attack').innerText = player.atk;
+      document.getElementById('defense').innerText = player.def;
+      document.getElementById('gold').innerText = player.gold;
+      document.getElementById('floor').innerText = floor;
+      
+      const curseEl = document.getElementById('curse');
+      if (curse) {
+        curseEl.innerText = `⚠ ${curse}`;
+        curseEl.style.display = 'block';
+      } else {
+        curseEl.style.display = 'none';
+      }
+      
+      render();
+    }
+    
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'w' || key === 'arrowup') move(0, -1);
+      else if (key === 's' || key === 'arrowdown') move(0, 1);
+      else if (key === 'a' || key === 'arrowleft') move(-1, 0);
+      else if (key === 'd' || key === 'arrowright') move(1, 0);
+      else if (key === 'r') showClassSelect();
+    });
+    
+    document.getElementById('class-select').classList.remove('hidden');
+  </script>
+</body>
+</html>
