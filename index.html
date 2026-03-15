@@ -775,8 +775,19 @@
         cursed: false,
         pet: null,
         totalSpent: 0,
-        kills: 0
+        kills: 0,
+        cycle: currentCycle
       };
+      
+      // 应用周目加成
+      const bonus = getCycleBonus();
+      player.maxHp += bonus.hpBonus;
+      player.hp = player.maxHp;
+      player.atk += bonus.atkBonus;
+      
+      if (currentCycle > 1) {
+        log(`✦ 第${currentCycle}周目开始！敌人强化${(currentCycle-1)*20}%！`, 'log-level');
+      }
       
       floor = 1;
       curse = null;
@@ -910,15 +921,17 @@
         else type = 'z';
         
         const data = ENEMIES[type];
+        // 周目敌人加成
+        const cycleMultiplier = 1 + (currentCycle - 1) * 0.2;
         enemies.push({
           x, y, type,
           name: data.name,
-          hp: data.hp + floor * 5,
-          maxHp: data.hp + floor * 5,
-          atk: data.atk + floor * 2,
+          hp: Math.floor((data.hp + floor * 5) * cycleMultiplier),
+          maxHp: Math.floor((data.hp + floor * 5) * cycleMultiplier),
+          atk: Math.floor((data.atk + floor * 2) * cycleMultiplier),
           def: data.def,
-          exp: data.exp,
-          gold: data.gold,
+          exp: Math.floor(data.exp * (1 + (currentCycle - 1) * 0.15)),
+          gold: Math.floor(data.gold * (1 + (currentCycle - 1) * 0.15)),
           isBoss: data.isBoss || false,
           isElite: data.isElite || false,
           skill: data.skill || null,
@@ -1661,6 +1674,21 @@
     };
     
     let playerAchievements = JSON.parse(localStorage.getItem('rogueDungeonAchievements') || '[]');
+    let currentCycle = parseInt(localStorage.getItem('rogueDungeonCycle') || '1');
+    let maxCycle = parseInt(localStorage.getItem('rogueDungeonMaxCycle') || '1');
+    
+    // 周目系统
+    const CYCLE_BONUSES = {
+      1: { hpBonus: 0, atkBonus: 0, goldBonus: 0, expBonus: 0 },
+      2: { hpBonus: 20, atkBonus: 2, goldBonus: 0.1, expBonus: 0.1 },
+      3: { hpBonus: 40, atkBonus: 4, goldBonus: 0.2, expBonus: 0.2 },
+      4: { hpBonus: 60, atkBonus: 6, goldBonus: 0.3, expBonus: 0.3 },
+      5: { hpBonus: 80, atkBonus: 8, goldBonus: 0.4, expBonus: 0.4 }
+    };
+    
+    function getCycleBonus() {
+      return CYCLE_BONUSES[Math.min(currentCycle, 5)] || CYCLE_BONUSES[5];
+    }
     let gameStartTime = Date.now();
     
     // 成就解锁
@@ -1730,6 +1758,12 @@
         pet: player.pet ? player.pet.name : '无'
       };
       
+      // 更新最高周目
+      if (currentCycle > maxCycle) {
+        maxCycle = currentCycle;
+        localStorage.setItem('rogueDungeonMaxCycle', maxCycle.toString());
+      }
+      
       // 解锁成就
       unlockAchievement('tribulation');
       if (player.pet) unlockAchievement('pet_master');
@@ -1747,6 +1781,11 @@
         achievementsHtml += `<span style="display:inline-block; margin:3px; padding:4px 8px; background:#2a2a3a; border:1px solid #4a4a6a; border-radius:4px;"><span style="margin-right:4px;">${a.icon}</span><span style="color:#ffd700; font-size:0.4rem;">${a.name}</span></span>`;
       });
       
+      // 周目加成信息
+      const nextCycle = currentCycle + 1;
+      const bonus = getCycleBonus();
+      const nextBonus = CYCLE_BONUSES[Math.min(nextCycle, 5)] || CYCLE_BONUSES[5];
+      
       // 显示胜利画面
       const victoryModal = document.createElement('div');
       victoryModal.id = 'victory-modal';
@@ -1755,6 +1794,7 @@
         <h2 style="color: #ffd700; font-size: 1.2rem; margin-bottom: 20px; text-shadow: 4px 4px 0 #8b0000;">✦ 渡劫飞升 ✦</h2>
         <p style="color: #7dd3fc; font-size: 0.6rem; margin-bottom: 10px;">恭喜渡过天劫，位列仙班！</p>
         <div style="background: #1a1a2e; padding: 15px; margin: 10px 0; border: 2px solid #4a4a6a;">
+          <p style="color: #fff; font-size: 0.5rem;">当前周目：第${currentCycle}周目</p>
           <p style="color: #fff; font-size: 0.5rem;">抵达境界：${stats.realm}</p>
           <p style="color: #fff; font-size: 0.5rem;">通关层数：第${stats.floors}层</p>
           <p style="color: #ffd700; font-size: 0.5rem;">总灵气：${stats.totalGold}</p>
@@ -1764,11 +1804,27 @@
           <p style="color: #888; font-size: 0.45rem; margin-bottom: 5px;">🏆 成就 (${playerAchievements.length}/${Object.keys(ACHIEVEMENTS).length})</p>
           <div style="font-size: 0;">${achievementsHtml || '<span style="color:#666; font-size:0.4rem;">暂无成就</span>'}</div>
         </div>
-        <button onclick="showClassSelect()" style="font-family: 'Press Start 2P', cursive; font-size: 0.5rem; padding: 12px 24px; background: #7dd3fc; border: none; cursor: pointer; color: #0a0a0f; box-shadow: 0 4px 0 #3a7a9a; margin-top: 15px;">↻ 再修来世</button>
+        <div style="margin-top: 15px;">
+          <button onclick="continueNextCycle(${nextCycle})" style="font-family: 'Press Start 2P', cursive; font-size: 0.45rem; padding: 10px 20px; background: #a855f7; border: none; cursor: pointer; color: #fff; box-shadow: 0 4px 0 #6b21a8; margin: 5px;">✈️ 第${nextCycle}周目</button>
+          <button onclick="showClassSelect()" style="font-family: 'Press Start 2P', cursive; font-size: 0.45rem; padding: 10px 20px; background: #7dd3fc; border: none; cursor: pointer; color: #0a0a0f; box-shadow: 0 4px 0 #3a7a9a; margin: 5px;">↻ 重新开始</button>
+        </div>
       `;
       document.body.appendChild(victoryModal);
       
       log('✦ 渡劫成功！位列仙班！', 'log-win');
+    }
+    
+    // 继续下一周目
+    function continueNextCycle(cycle) {
+      currentCycle = cycle;
+      localStorage.setItem('rogueDungeonCycle', currentCycle.toString());
+      
+      // 移除胜利界面
+      const modal = document.getElementById('victory-modal');
+      if (modal) modal.remove();
+      
+      // 重新开始，但保留周目
+      showClassSelect();
     }
     
     function gameOver() {
