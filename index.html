@@ -473,6 +473,24 @@
     </div>
   </div>
   
+  <!-- 开场剧情 -->
+  <div id="story-modal" class="modal">
+    <h2 style="color: #ffd700; font-size: 1rem; margin-bottom: 15px;">☯ 阴阳道 ☯</h2>
+    <div style="background: #1a1a2e; padding: 20px; margin: 10px 0; border: 2px solid #4a4a6a; max-height: 300px; overflow-y: auto; text-align: left;">
+      <p style="color: #aaa; font-size: 0.45rem; line-height: 1.8; margin-bottom: 10px;">
+        <span style="color: #7dd3fc;">【序章】</span><br><br>
+        天地初开，阴阳交汇，灵气复苏。<br><br>
+        自古以来，修仙者追求长生不老，渡劫飞升。<br><br>
+        然修仙之路艰难险阻，需历经十层天劫，方可突破凡尘，位列仙班。<br><br>
+        如今，灵气复苏，万物觉醒。<br><br>
+        北方深山之中，旱魃苏醒，为祸人间。<br><br>
+        各大门派广招弟子，修炼阴阳之道，誓要击败旱魃，渡劫飞升！<br><br>
+        <span style="color: #ffd700;">—— 你的修仙之路，即将开始 ——</span>
+      </p>
+    </div>
+    <button onclick="closeStory()" style="font-family: 'Press Start 2P', cursive; font-size: 0.5rem; padding: 12px 24px; background: #7dd3fc; border: none; cursor: pointer; color: #0a0a0f; box-shadow: 0 4px 0 #3a7a9a; margin-top: 10px;">进入游戏</button>
+  </div>
+  
   <!-- 职业选择 -->
   <div id="class-select" class="modal">
     <h2>✦ 选择修炼方向 ✦</h2>
@@ -744,6 +762,13 @@
     
     function showClassSelect() {
       document.getElementById('game-over').classList.add('hidden');
+      const storyModal = document.getElementById('story-modal');
+      if (storyModal) storyModal.classList.add('hidden');
+      document.getElementById('class-select').classList.remove('hidden');
+    }
+    
+    function closeStory() {
+      document.getElementById('story-modal').classList.add('hidden');
       document.getElementById('class-select').classList.remove('hidden');
     }
     
@@ -2089,7 +2114,15 @@
       else if (key === 'r') showClassSelect();
     });
     
-    document.getElementById('class-select').classList.remove('hidden');
+    // 首次显示开场剧情，之后显示职业选择
+    const storyModal = document.getElementById('story-modal');
+    const seenStory = localStorage.getItem('rogueDungeonSeenStory');
+    if (storyModal && !seenStory) {
+      storyModal.classList.remove('hidden');
+      localStorage.setItem('rogueDungeonSeenStory', 'true');
+    } else {
+      document.getElementById('class-select').classList.remove('hidden');
+    }
     
     // 移动端触摸控制
     function handleTouch(e, dir) {
