@@ -846,7 +846,7 @@
     
     function spawnEnemies() {
       enemies = [];
-      const numEnemies = 3 + floor * 2;
+      const numEnemies = floor >= FINAL_FLOOR ? 5 : 3 + floor * 2;
       
       for (let i = 0; i < numEnemies; i++) {
         let x, y;
@@ -856,8 +856,10 @@
         } while (map[y][x] !== '.' || (x === player.x && y === player.y));
         
         let type;
-        // 精英怪 (20% 概率，2层以上)
-        if (floor >= 2 && Math.random() < 0.2) {
+        // 第10层必定有BOSS
+        if (floor >= FINAL_FLOOR && i === 0) {
+          type = 'D'; // 旱魃
+        } else if (floor >= 2 && floor < FINAL_FLOOR && Math.random() < 0.2) {
           type = 'E';
         } else if (floor >= 3 && Math.random() < 0.2) type = 'D';
         else if (floor >= 2 && Math.random() < 0.4) type = 's';
@@ -1264,6 +1266,16 @@
         log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win');
         player.exp += enemy.exp;
         player.gold += enemy.gold;
+        
+        // 记录击杀
+        player.kills = (player.kills || 0) + 1;
+        
+        // 检查是否是BOSS击败
+        if (enemy.isBoss && floor >= FINAL_FLOOR) {
+          log('✦ 旱魃已除！天劫降临！', 'log-level');
+          setTimeout(() => attemptTribulation(), 1000);
+        }
+        
         enemies = enemies.filter(e => e !== enemy);
         
         if (player.exp >= player.expTo) {
@@ -1463,9 +1475,82 @@
       return nearest;
     }
 
+    // 最终层数
+    const FINAL_FLOOR = 10;
+    
     function nextFloor() {
+      // 检查是否是最终层
+      if (floor >= FINAL_FLOOR) {
+        // 触发渡劫
+        triggerTribulation();
+        return;
+      }
       shopAllowed = true;
       openShop();
+    }
+    
+    // 渡劫系统
+    function triggerTribulation() {
+      log('✦ 抵达第十层！天劫降临！', 'log-level');
+      log('◈ 旱魃Boss出现！击败它才能渡劫！', 'log-combat');
+      // 不开商店了，直接进入最终战斗
+      shopAllowed = false;
+    }
+    
+    // 渡劫结果判定
+    function attemptTribulation() {
+      // 渡劫成功率计算
+      let successRate = 0.5; // 基础50%
+      
+      // 影响因素
+      if (player.maxHp >= 150) successRate += 0.1;
+      if (player.atk >= 30) successRate += 0.1;
+      if (player.def >= 10) successRate += 0.1;
+      if (player.pet) successRate += 0.1;
+      if (curse) successRate -= 0.2;
+      
+      // 随机判定
+      const roll = Math.random();
+      const success = roll < successRate;
+      
+      if (success) {
+        victory();
+      } else {
+        log('◈ 渡劫失败！天劫之下，灰飞烟灭...', 'log-death');
+        gameOver();
+      }
+    }
+    
+    // 通关胜利
+    function victory() {
+      audio.stopBgm();
+      
+      const stats = {
+        floors: floor,
+        realm: LEVELS[Math.min(player.level, LEVELS.length - 1)],
+        totalGold: player.gold,
+        kills: player.kills || 0,
+        pet: player.pet ? player.pet.name : '无'
+      };
+      
+      // 显示胜利画面
+      const victoryModal = document.createElement('div');
+      victoryModal.id = 'victory-modal';
+      victoryModal.className = 'modal';
+      victoryModal.innerHTML = `
+        <h2 style="color: #ffd700; font-size: 1.2rem; margin-bottom: 20px; text-shadow: 4px 4px 0 #8b0000;">✦ 渡劫飞升 ✦</h2>
+        <p style="color: #7dd3fc; font-size: 0.6rem; margin-bottom: 10px;">恭喜渡过天劫，位列仙班！</p>
+        <div style="background: #1a1a2e; padding: 15px; margin: 10px 0; border: 2px solid #4a4a6a;">
+          <p style="color: #fff; font-size: 0.5rem;">抵达境界：${stats.realm}</p>
+          <p style="color: #fff; font-size: 0.5rem;">通关层数：第${stats.floors}层</p>
+          <p style="color: #ffd700; font-size: 0.5rem;">总灵气：${stats.totalGold}</p>
+          <p style="color: #f472b6; font-size: 0.5rem;">灵兽伙伴：${stats.pet}</p>
+        </div>
+        <button onclick="showClassSelect()" style="font-family: 'Press Start 2P', cursive; font-size: 0.5rem; padding: 12px 24px; background: #7dd3fc; border: none; cursor: pointer; color: #0a0a0f; box-shadow: 0 4px 0 #3a7a9a; margin-top: 15px;">↻ 再修来世</button>
+      `;
+      document.body.appendChild(victoryModal);
+      
+      log('✦ 渡劫成功！位列仙班！', 'log-win');
     }
     
     function gameOver() {
@@ -1576,12 +1661,18 @@
       
       floor++;
       
+      // 检查是否是最终层
+      if (floor >= FINAL_FLOOR) {
+        log('✦ 最后一层！击败旱魃，渡劫飞升！', 'log-level');
+      }
+      
       if (player.regen > 0) {
         player.hp = Math.min(player.maxHp, player.hp + player.regen);
         log(`◈ 炼丹生效，回复${player.regen}气血！`, 'log-skill');
       }
       
-      if (floor > 1 && !curse && Math.random() < 0.25) {
+      // 最终层不生成诅咒
+      if (floor < FINAL_FLOOR && floor > 1 && !curse && Math.random() < 0.25) {
         const curses = {
           '血光': '受伤+20%',
           '灵气流失': '灵气-30%',
