@@ -735,7 +735,9 @@
         poison: 0,
         hasKey: false,
         cursed: false,
-        pet: null
+        pet: null,
+        totalSpent: 0,
+        kills: 0
       };
       
       floor = 1;
@@ -744,6 +746,7 @@
       enemies = [];
       items = [];
       logs = [];
+      gameStartTime = Date.now();
       
       document.getElementById('game-over').classList.add('hidden');
       generateMap();
@@ -1251,6 +1254,9 @@
         log(`◈ 攻击${enemy.name}，${dmg}伤害！`, 'log-combat');
       }
       
+      // 成就检测：一拳超人（单次50+伤害）
+      if (dmg >= 50) unlockAchievement('one_punch');
+      
       enemy.hp -= dmg;
       
       // 灵兽协助攻击
@@ -1269,6 +1275,10 @@
         
         // 记录击杀
         player.kills = (player.kills || 0) + 1;
+        
+        // 成就检测
+        if (enemy.isElite) unlockAchievement('elite_killer');
+        if (enemy.isBoss) unlockAchievement('boss_killer');
         
         // 检查是否是BOSS击败
         if (enemy.isBoss && floor >= FINAL_FLOOR) {
@@ -1475,6 +1485,34 @@
       return nearest;
     }
 
+    // 成就系统
+    const ACHIEVEMENTS = {
+      'first_blood': { name: '初战告捷', desc: '击败第一个敌人', icon: '⚔️' },
+      'elite_killer': { name: '精英杀手', desc: '击败精英怪', icon: '💀' },
+      'boss_killer': { name: '屠魔', desc: '击败Boss', icon: '👹' },
+      'shopaholic': { name: '购物狂', desc: '在商店消费100灵气', icon: '💰' },
+      'pet_master': { name: '御兽师', desc: '获得灵兽', icon: '🐾' },
+      'no_damage': { name: '无伤', desc: '击败Boss时满血', icon: '🛡️' },
+      'one_punch': { name: '一拳超人', desc: '单次攻击造成50+伤害', icon: '💥' },
+      'survivor': { name: '幸存者', desc: '生命低于10%存活', icon: '❤️' },
+      'rich': { name: '灵气冲天', desc: '单局获得500+灵气', icon: '💎' },
+      'speedrun': { name: '速通', desc: '10分钟内通关', icon: '⏱️' },
+      'tribulation': { name: '渡劫成功', desc: '通关游戏', icon: '✈️' },
+      'all_classes': { name: '三修', desc: '用三个职业各通关一次', icon: '🔄' }
+    };
+    
+    let playerAchievements = JSON.parse(localStorage.getItem('rogueDungeonAchievements') || '[]');
+    let gameStartTime = Date.now();
+    
+    // 成就解锁
+    function unlockAchievement(id) {
+      if (!playerAchievements.includes(id)) {
+        playerAchievements.push(id);
+        localStorage.setItem('rogueDungeonAchievements', JSON.stringify(playerAchievements));
+        log(`🏆 成就解锁：${ACHIEVEMENTS[id].name}！`, 'log-win');
+      }
+    }
+    
     // 最终层数
     const FINAL_FLOOR = 10;
     
@@ -1533,6 +1571,23 @@
         pet: player.pet ? player.pet.name : '无'
       };
       
+      // 解锁成就
+      unlockAchievement('tribulation');
+      if (player.pet) unlockAchievement('pet_master');
+      if (player.gold >= 500) unlockAchievement('rich');
+      if (stats.kills >= 1) unlockAchievement('first_blood');
+      
+      // 检查无伤
+      if (player.hp >= player.maxHp) unlockAchievement('no_damage');
+      
+      // 显示成就
+      let achievementsHtml = '';
+      const newAchievements = playerAchievements.slice(-5); // 显示最近的
+      newAchievements.forEach(id => {
+        const a = ACHIEVEMENTS[id];
+        achievementsHtml += `<span style="display:inline-block; margin:3px; padding:4px 8px; background:#2a2a3a; border:1px solid #4a4a6a; border-radius:4px;"><span style="margin-right:4px;">${a.icon}</span><span style="color:#ffd700; font-size:0.4rem;">${a.name}</span></span>`;
+      });
+      
       // 显示胜利画面
       const victoryModal = document.createElement('div');
       victoryModal.id = 'victory-modal';
@@ -1546,6 +1601,10 @@
           <p style="color: #ffd700; font-size: 0.5rem;">总灵气：${stats.totalGold}</p>
           <p style="color: #f472b6; font-size: 0.5rem;">灵兽伙伴：${stats.pet}</p>
         </div>
+        <div style="margin: 10px 0;">
+          <p style="color: #888; font-size: 0.45rem; margin-bottom: 5px;">🏆 成就 (${playerAchievements.length}/${Object.keys(ACHIEVEMENTS).length})</p>
+          <div style="font-size: 0;">${achievementsHtml || '<span style="color:#666; font-size:0.4rem;">暂无成就</span>'}</div>
+        </div>
         <button onclick="showClassSelect()" style="font-family: 'Press Start 2P', cursive; font-size: 0.5rem; padding: 12px 24px; background: #7dd3fc; border: none; cursor: pointer; color: #0a0a0f; box-shadow: 0 4px 0 #3a7a9a; margin-top: 15px;">↻ 再修来世</button>
       `;
       document.body.appendChild(victoryModal);
@@ -1556,7 +1615,20 @@
     function gameOver() {
       audio.stopBgm();
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
-      document.getElementById('go-msg').innerText = `第${floor}层 ${realm} | 灵气${player.gold}`;
+      
+      // 成就检测：幸存者
+      const hpPercent = player.hp / player.maxHp;
+      if (hpPercent < 0.1 && hpPercent > 0) unlockAchievement('survivor');
+      
+      // 显示成就
+      let achievementsHtml = '';
+      const newAchievements = playerAchievements.slice(-3);
+      newAchievements.forEach(id => {
+        const a = ACHIEVEMENTS[id];
+        achievementsHtml += `<span style="display:inline-block; margin:2px; padding:2px 4px; background:#2a2a3a; border:1px solid #4a4a6a; border-radius:2px;"><span style="margin-right:2px;">${a.icon}</span><span style="color:#ffd700; font-size:0.35rem;">${a.name}</span></span>`;
+      });
+      
+      document.getElementById('go-msg').innerHTML = `第${floor}层 ${realm} | 灵气${player.gold}<br><span style="font-size:0.35rem; color:#888;">🏆 ${playerAchievements.length}个成就</span>`;
       document.getElementById('game-over').classList.remove('hidden');
       log('✦ 身死道消...', 'log-death');
     }
@@ -1618,6 +1690,10 @@
       }
 
       player.gold -= item.price;
+      
+      // 累计消费追踪
+      player.totalSpent = (player.totalSpent || 0) + item.price;
+      if (player.totalSpent >= 100) unlockAchievement('shopaholic');
       
       if (item.effect.type === 'atk') {
         player.atk += item.effect.value;
