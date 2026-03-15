@@ -335,6 +335,58 @@
       text-align: center;
       color: #ffd700;
     }
+    
+    /* 移动端虚拟按键 */
+    .mobile-controls {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      gap: 5px;
+      z-index: 50;
+    }
+    
+    .dpad {
+      display: grid;
+      grid-template-columns: 50px 50px 50px;
+      grid-template-rows: 50px 50px;
+      gap: 2px;
+    }
+    
+    .dpad-btn {
+      width: 50px;
+      height: 50px;
+      background: rgba(74, 74, 106, 0.8);
+      border: 2px solid #6a6a8a;
+      border-radius: 8px;
+      color: #7dd3fc;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    
+    .dpad-btn:active {
+      background: rgba(125, 211, 252, 0.3);
+    }
+    
+    .dpad-up { grid-column: 2; grid-row: 1; }
+    .dpad-left { grid-column: 1; grid-row: 2; }
+    .dpad-down { grid-column: 2; grid-row: 2; }
+    .dpad-right { grid-column: 3; grid-row: 2; }
+    
+    @media (max-width: 768px) {
+      .mobile-controls {
+        display: flex;
+      }
+      body {
+        padding-bottom: 180px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -374,10 +426,16 @@
         <span class="stat-value" id="floor">1</span>
       </div>
       <div class="curse-badge" id="curse"></div>
+      <div class="curse-badge" id="key-badge" style="color: #22c55e; display: none;">🔑 钥匙</div>
       
       <div class="weapon-display">
         <span class="weapon-icon" id="weapon-icon">✊</span>
         <span class="weapon-name" id="weapon-name">徒手</span>
+      </div>
+      
+      <div class="weapon-display" id="pet-display" style="display: none;">
+        <span class="weapon-icon" id="pet-icon">🐾</span>
+        <span class="weapon-name" id="pet-name" style="color: #f472b6;">灵兽</span>
       </div>
       
       <h2>▣ 储物袋</h2>
@@ -403,6 +461,16 @@
     <kbd>R</kbd> 重新开始 | 
     <button onclick="saveGame()" style="font-family:inherit; font-size:0.45rem; cursor:pointer;">存档</button>
     <button onclick="loadGame()" style="font-family:inherit; font-size:0.45rem; cursor:pointer;">读取</button>
+  </div>
+  
+  <!-- 移动端虚拟按键 -->
+  <div class="mobile-controls">
+    <div class="dpad">
+      <button class="dpad-btn dpad-up" ontouchstart="handleTouch(event, 'up')">↑</button>
+      <button class="dpad-btn dpad-left" ontouchstart="handleTouch(event, 'left')">←</button>
+      <button class="dpad-btn dpad-down" ontouchstart="handleTouch(event, 'down')">↓</button>
+      <button class="dpad-btn dpad-right" ontouchstart="handleTouch(event, 'right')">→</button>
+    </div>
   </div>
   
   <!-- 职业选择 -->
@@ -469,14 +537,26 @@
       '!': '#34d399',
       '$': '#ffd700',
       '>': '#7dd3fc',
-      'X': '#ef4444'
+      'X': '#ef4444',
+      'B': '#fbbf24',
+      'T': '#06b6d4',
+      'E': '#dc2626',
+      'K': '#22c55e',
+      'M': '#ec4899',
+      'P': '#14b8a6',
+      'c': '#f472b6',
+      'O': '#a78bfa',
+      'v': '#94a3b8',
+      'w': '#818cf8',
+      'y': '#4ade80'
     };
     
     const ENEMIES = {
       'z': { name: '僵尸', hp: 25, atk: 6, def: 0, exp: 15, gold: 8 },
       'd': { name: '毒虫', hp: 35, atk: 10, def: 3, exp: 25, gold: 15 },
       's': { name: '煞尸', hp: 50, atk: 15, def: 6, exp: 50, gold: 30 },
-      'D': { name: '旱魃', hp: 120, atk: 25, def: 12, exp: 300, gold: 200 }
+      'D': { name: '旱魃', hp: 120, atk: 25, def: 12, exp: 300, gold: 200, isBoss: true, skills: ['喷火', '召唤'] },
+      'E': { name: '魍魉', hp: 80, atk: 18, def: 8, exp: 120, gold: 80, isElite: true, skill: '诅咒' }
     };
     
     const ITEMS = {
@@ -486,14 +566,66 @@
       'gourd': { name: '葫芦', type: 'weapon', weaponKey: 'gourd' },
       'sword': { name: '太极剑', type: 'weapon', weaponKey: 'sword' },
       '拂尘': { name: '拂尘', type: 'weapon', weaponKey: '拂尘' },
-      '丹炉': { name: '炼丹炉', type: 'weapon', weaponKey: '丹炉' }
+      '丹炉': { name: '炼丹炉', type: 'weapon', weaponKey: '丹炉' },
+      'K': { name: '青铜钥匙', type: 'key', value: 1 },
+      'B': { name: '宝箱', type: 'chest', value: 50 }
+    };
+    
+    // 地图事件
+    const EVENTS = {
+      'M': { name: '神秘商人', type: 'shop', desc: '出售稀有道具' },
+      'P': { name: '修炼蒲团', type: 'exp', value: 35, desc: '获得修炼经验' },
+      'c': { name: '灵兽蛋', type: 'pet', desc: '孵化灵兽伙伴' },
+      'O': { name: '神秘老人', type: 'elder', desc: '神秘三选一' },
+      'v': { name: '陷阱', type: 'trap', damage: 20, desc: '小心脚下' },
+      'w': { name: '占卜台', type: 'divine', desc: '预示命运' },
+      'y': { name: '悟道树', type: 'awaken', desc: '境界突破' }
     };
     
     const LEVELS = ['筑基期', '金丹期', '元婴期', '化神期', '炼虚期', '大乘期', '渡劫期'];
 
     // Audio Module
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let bgmOsc = null;
+    let bgmPlaying = false;
+    
     const audio = {
+      playBgm: () => {
+        if (bgmPlaying) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        
+        // Simple ambient drone
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const lfo = audioCtx.createOscillator();
+        const lfoGain = audioCtx.createGain();
+        
+        lfo.frequency.value = 0.2;
+        lfoGain.gain.value = 20;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        
+        osc.type = 'sine';
+        osc.frequency.value = 110;
+        gain.gain.value = 0.03;
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.start();
+        lfo.start();
+        
+        bgmOsc = { osc, gain, lfo };
+        bgmPlaying = true;
+      },
+      stopBgm: () => {
+        if (bgmOsc) {
+          bgmOsc.osc.stop();
+          bgmOsc.lfo.stop();
+          bgmOsc = null;
+          bgmPlaying = false;
+        }
+      },
       play: (type) => {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         const osc = audioCtx.createOscillator();
@@ -523,6 +655,15 @@
           osc.frequency.setValueAtTime(300, now);
           osc.frequency.linearRampToValueAtTime(600, now + 0.3);
           gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        } else if (type === 'chest') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(400, now);
+          osc.frequency.setValueAtTime(600, now + 0.1);
+          osc.frequency.setValueAtTime(800, now + 0.2);
+          gain.gain.setValueAtTime(0.15, now);
           gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
           osc.start(now);
           osc.stop(now + 0.3);
@@ -591,7 +732,10 @@
         confused: false,
         guard: false,
         tempBuffs: [],
-        poison: 0
+        poison: 0,
+        hasKey: false,
+        cursed: false,
+        pet: null
       };
       
       floor = 1;
@@ -644,6 +788,27 @@
         map[Math.floor(room.y + room.h/2)][Math.floor(room.x + room.w/2)] = 'X';
       }
       
+      // 传送门 (10% 概率)
+      if (Math.random() < 0.1) {
+        const room = rooms[Math.floor(Math.random() * rooms.length)];
+        map[Math.floor(room.y + room.h/2)][Math.floor(room.x + room.w/2) - 1] = 'T';
+      }
+      
+      // 地图事件 (30% 概率每个房间)
+      const eventKeys = Object.keys(EVENTS);
+      rooms.forEach((room, idx) => {
+        if (idx === 0) return; // 第一个房间不放事件
+        if (Math.random() < 0.3) {
+          const eventKey = eventKeys[Math.floor(Math.random() * eventKeys.length)];
+          const ex = Math.floor(room.x + room.w / 2);
+          const ey = Math.floor(room.y + room.h / 2);
+          // 确保不覆盖出口和其他特殊格子
+          if (map[ey][ex] === '.') {
+            map[ey][ex] = eventKey;
+          }
+        }
+      });
+      
       for (let i = 1; i < rooms.length; i++) {
         const r1 = rooms[i - 1];
         const r2 = rooms[i];
@@ -691,7 +856,10 @@
         } while (map[y][x] !== '.' || (x === player.x && y === player.y));
         
         let type;
-        if (floor >= 3 && Math.random() < 0.2) type = 'D';
+        // 精英怪 (20% 概率，2层以上)
+        if (floor >= 2 && Math.random() < 0.2) {
+          type = 'E';
+        } else if (floor >= 3 && Math.random() < 0.2) type = 'D';
         else if (floor >= 2 && Math.random() < 0.4) type = 's';
         else if (Math.random() < 0.6) type = 'd';
         else type = 'z';
@@ -705,7 +873,12 @@
           atk: data.atk + floor * 2,
           def: data.def,
           exp: data.exp,
-          gold: data.gold
+          gold: data.gold,
+          isBoss: data.isBoss || false,
+          isElite: data.isElite || false,
+          skill: data.skill || null,
+          skills: data.skills || [],
+          usedSkill: false
         });
       }
     }
@@ -714,12 +887,32 @@
       items = [];
       const numItems = 2 + Math.floor(Math.random() * 3);
       
-      for (let i = 0; i < numItems; i++) {
+      // 钥匙 (20% 概率)
+      if (Math.random() < 0.2) {
         let x, y;
         do {
           x = Math.floor(Math.random() * WIDTH);
           y = Math.floor(Math.random() * HEIGHT);
         } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y));
+        items.push({ x, y, ...ITEMS['K'] });
+      }
+      
+      // 宝箱 (15% 概率)
+      if (Math.random() < 0.15) {
+        let x, y;
+        do {
+          x = Math.floor(Math.random() * WIDTH);
+          y = Math.floor(Math.random() * HEIGHT);
+        } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || items.some(i => i.x === x && i.y === y));
+        items.push({ x, y, ...ITEMS['B'] });
+      }
+      
+      for (let i = 0; i < numItems; i++) {
+        let x, y;
+        do {
+          x = Math.floor(Math.random() * WIDTH);
+          y = Math.floor(Math.random() * HEIGHT);
+        } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || items.some(i => i.x === x && i.y === y));
         
         const rand = Math.random();
         if (rand < 0.2) {
@@ -746,10 +939,15 @@
       if (item) {
         if (item.type === 'heal') return '!';
         if (item.type === 'gold') return '$';
+        if (item.type === 'key') return 'K';
+        if (item.type === 'chest') return 'B';
         return item.name.charAt(0);
       }
       if (map[y][x] === '>') return '>';
       if (map[y][x] === 'X') return 'X';
+      if (map[y][x] === 'T') return 'T';
+      // 事件格子
+      if (EVENTS[map[y][x]]) return map[y][x];
       return map[y][x];
     }
     
@@ -767,6 +965,11 @@
     }
     
     function move(dx, dy) {
+      // 首次移动时播放背景音乐
+      if (!bgmPlaying) {
+        audio.playBgm();
+      }
+      
       const nx = player.x + dx;
       const ny = player.y + dy;
       
@@ -818,12 +1021,194 @@
           player.weapon = item.weaponKey;
           updateWeaponDisplay();
           log(`◈ 获得${weapon.icon}${weapon.name}，攻击+${weapon.atk}！`, 'log-item');
+        } else if (item.type === 'key') {
+          player.hasKey = true;
+          log(`◈ 获得${item.name}！可用于开启宝箱`, 'log-item');
+        } else if (item.type === 'chest') {
+          if (player.hasKey) {
+            player.hasKey = false;
+            player.gold += item.value;
+            player.hp = Math.min(player.maxHp, player.hp + 30);
+            log(`◈ 打开宝箱，获得${item.value}灵气和30气血！`, 'log-win');
+            audio.play('chest');
+          } else {
+            log(`◈ 需要钥匙才能开启宝箱！`, 'log-curse');
+            return; // Don't pick up the chest
+          }
         }
         items.splice(itemIdx, 1);
       }
       
+      // 传送门
+      if (map[ny][nx] === 'T') {
+        // 随机传送到另一个房间
+        const rooms = [];
+        for (let y = 0; y < HEIGHT; y++) {
+          for (let x = 0; x < WIDTH; x++) {
+            if (map[y][x] === '.') rooms.push({x, y});
+          }
+        }
+        if (rooms.length > 0) {
+          const target = rooms[Math.floor(Math.random() * rooms.length)];
+          player.x = target.x;
+          player.y = target.y;
+          log(`◈ 传送门触发！随机传送到另一处！`, 'log-skill');
+        }
+      }
+      
+      // 地图事件触发
+      const eventKey = map[ny][nx];
+      if (EVENTS[eventKey]) {
+        triggerEvent(eventKey, nx, ny);
+      }
+      
       enemyTurn();
       updateUI();
+    }
+    
+    // 事件触发处理
+    function triggerEvent(eventKey, x, y) {
+      const event = EVENTS[eventKey];
+      if (!event) return;
+      
+      switch(event.type) {
+        case 'exp':
+          const expGain = 20 + Math.floor(Math.random() * 30);
+          player.exp += expGain;
+          log(`◈ 修炼蒲团：获得${expGain}经验！`, 'log-item');
+          if (player.exp >= player.expTo) levelUp();
+          map[y][x] = '.'; // 事件消耗
+          break;
+          
+        case 'pet':
+          if (!player.pet) {
+            player.pet = { name: '灵兽', atk: 3 + floor };
+            log(`◈ 灵兽蛋孵化！获得灵兽伙伴，攻击+${player.pet.atk}！`, 'log-item');
+          } else {
+            const bonus = 2 + floor;
+            player.pet.atk += bonus;
+            log(`◈ 灵兽成长，攻击+${bonus}！`, 'log-item');
+          }
+          map[y][x] = '.';
+          break;
+          
+        case 'trap':
+          const trapDmg = 15 + Math.floor(floor * 3);
+          player.hp -= trapDmg;
+          log(`◈ 陷阱触发！损失${trapDmg}气血！`, 'log-damage');
+          if (player.hp <= 0) {
+            gameOver();
+            return;
+          }
+          // 陷阱消失或保留（30%消失）
+          if (Math.random() < 0.3) map[y][x] = '.';
+          break;
+          
+        case 'divine':
+          const divineRoll = Math.random();
+          if (divineRoll < 0.4) {
+            const heal = 30;
+            player.hp = Math.min(player.maxHp, player.hp + heal);
+            log(`◈ 占卜台：今日大吉！恢复${heal}气血！`, 'log-heal');
+          } else if (divineRoll < 0.7) {
+            const gold = 25 + floor * 5;
+            player.gold += gold;
+            log(`◈ 占卜台：财运亨通！获得${gold}灵气！`, 'log-item');
+          } else if (divineRoll < 0.9) {
+            const dmg = 20;
+            player.hp -= dmg;
+            log(`◈ 占卜台：今日大凶！损失${dmg}气血！`, 'log-damage');
+            if (player.hp <= 0) {
+              gameOver();
+              return;
+            }
+          } else {
+            player.hasKey = true;
+            log(`◈ 占卜台：神秘启示！获得青铜钥匙！`, 'log-item');
+          }
+          map[y][x] = '.';
+          break;
+          
+        case 'awaken':
+          log(`◈ 悟道树：天地共鸣！境界突破！`, 'log-level');
+          player.level++;
+          player.exp = 0;
+          player.expTo = Math.floor(player.expTo * 1.3);
+          player.maxHp += 20;
+          player.hp = player.maxHp;
+          player.atk += 3;
+          const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
+          log(`◈ 晋升${realm}！`, 'log-level');
+          map[y][x] = '.';
+          break;
+          
+        case 'elder':
+          showElderChoice();
+          // 不清除事件，可重复触发
+          break;
+          
+        case 'shop':
+          showEventShop();
+          break;
+      }
+    }
+    
+    // 神秘老人三选一
+    function showElderChoice() {
+      const choices = [
+        { id: 'heal', name: '疗伤', desc: '恢复50气血', action: () => {
+          player.hp = Math.min(player.maxHp, player.hp + 50);
+          log('◈ 老人施展神通，恢复50气血！', 'log-heal');
+        }},
+        { id: 'buff', name: '传功', desc: '永久攻击+3', action: () => {
+          player.atk += 3;
+          log('◈ 老人传授功法，攻击+3！', 'log-item');
+        }},
+        { id: 'curse', name: '考验', desc: '30%几率获得强大诅咒，70%获得50灵气', action: () => {
+          if (Math.random() < 0.3) {
+            curse = '道心不稳';
+            player.expTo = Math.floor(player.expTo * 1.5);
+            log('◈ 考验失败！施加诅咒：道心不稳', 'log-curse');
+          } else {
+            player.gold += 50;
+            log('◈ 考验通过！获得50灵气！', 'log-item');
+          }
+        }}
+      ];
+      
+      // 简化版：直接随机执行一个
+      const choice = choices[Math.floor(Math.random() * choices.length)];
+      choice.action();
+    }
+    
+    // 神秘商店
+    const EVENT_SHOP_ITEMS = [
+      { id: 'event_sword', name: '仙剑', price: 150, atk: 20, desc: 'ATK+20' },
+      { id: 'event_armor', name: '仙甲', price: 120, def: 10, desc: 'DEF+10' },
+      { id: 'event_heal', name: '仙丹', price: 80, heal: 100, desc: 'HP全满' },
+      { id: 'event_key', name: '金钥匙', price: 50, desc: '直接开宝箱' }
+    ];
+    
+    function showEventShop() {
+      const choice = confirm('神秘商人出现！购买稀有道具？(确定=进入，取消=离开)');
+      if (!choice) return;
+      
+      // 随机一件商品
+      const item = EVENT_SHOP_ITEMS[Math.floor(Math.random() * EVENT_SHOP_ITEMS.length)];
+      const buy = confirm(`${item.name} - ${item.price}灵气\n${item.desc}\n\n确认购买？`);
+      if (buy) {
+        if (player.gold >= item.price) {
+          player.gold -= item.price;
+          if (item.atk) player.atk += item.atk;
+          if (item.def) player.def += item.def;
+          if (item.heal) player.hp = player.maxHp;
+          if (item.id === 'event_key') player.hasKey = true;
+          log(`◈ 购买${item.name}成功！`, 'log-item');
+          audio.play('buy');
+        } else {
+          log('◈ 灵气不足！', 'log-curse');
+        }
+      }
     }
     
     function attack(enemy) {
@@ -865,6 +1250,14 @@
       }
       
       enemy.hp -= dmg;
+      
+      // 灵兽协助攻击
+      if (player.pet && enemy.hp > 0) {
+        const petDmg = Math.max(1, Math.floor(player.pet.atk * 0.6));
+        enemy.hp -= petDmg;
+        log(`◈ ${player.pet.name}协助攻击，造成${petDmg}伤害！`, 'log-skill');
+      }
+      
       audio.play('attack');
       
       if (enemy.hp <= 0) {
@@ -907,6 +1300,40 @@
           enemy.poison--;
         }
 
+        // Boss skills (旱魃)
+        if (enemy.isBoss && !enemy.usedSkill && enemy.hp < enemy.maxHp * 0.5) {
+          const skill = enemy.skills[Math.floor(Math.random() * enemy.skills.length)];
+          if (skill === '喷火') {
+            // AOE damage
+            const dist = Math.abs(player.x - enemy.x) + Math.abs(player.y - enemy.y);
+            if (dist <= 3) {
+              let dmg = Math.floor(enemy.atk * 1.2);
+              player.hp -= dmg;
+              log(`▸ ${enemy.name}喷火！${dmg}范围伤害！`, 'log-damage');
+            }
+            enemy.usedSkill = true;
+          } else if (skill === '召唤') {
+            // Summon a minion
+            let x, y;
+            do {
+              x = Math.floor(Math.random() * WIDTH);
+              y = Math.floor(Math.random() * HEIGHT);
+            } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || (x === player.x && y === player.y));
+            enemies.push({ x, y, type: 'z', name: '僵尸', hp: 20, maxHp: 20, atk: 5, def: 0, exp: 10, gold: 5 });
+            log(`▸ ${enemy.name}召唤僵尸！`, 'log-skill');
+            enemy.usedSkill = true;
+          }
+        }
+        
+        // Elite enemy skill (魍魉)
+        if (enemy.isElite && !enemy.usedSkill) {
+          if (enemy.skill === '诅咒' && Math.random() < 0.3) {
+            player.cursed = true;
+            log(`▸ ${enemy.name}施加诅咒！防御-30%！`, 'log-curse');
+            enemy.usedSkill = true;
+          }
+        }
+
         const dx = Math.sign(player.x - enemy.x);
         const dy = Math.sign(player.y - enemy.y);
         
@@ -914,11 +1341,12 @@
         if (dist === 1) {
           let dmg = Math.max(1, enemy.atk - player.def);
           if (curse === '血光') dmg = Math.floor(dmg * 1.2);
+          if (player.cursed) dmg = Math.floor(dmg * 1.3);
           
           if (player.guard) {
             dmg = 0;
             log(`▸ ${enemy.name}攻击，被护体格挡！`, 'log-skill');
-            player.guard = false; // Consume guard
+            player.guard = false;
           } else {
             player.hp -= dmg;
             log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage');
@@ -1041,6 +1469,7 @@
     }
     
     function gameOver() {
+      audio.stopBgm();
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
       document.getElementById('go-msg').innerText = `第${floor}层 ${realm} | 灵气${player.gold}`;
       document.getElementById('game-over').classList.remove('hidden');
@@ -1250,6 +1679,22 @@
         curseEl.style.display = 'none';
       }
       
+      const keyEl = document.getElementById('key-badge');
+      if (player.hasKey) {
+        keyEl.style.display = 'block';
+      } else {
+        keyEl.style.display = 'none';
+      }
+      
+      // 灵兽显示
+      const petEl = document.getElementById('pet-display');
+      if (player.pet) {
+        petEl.style.display = 'block';
+        document.getElementById('pet-name').innerText = `${player.pet.name} +${player.pet.atk}`;
+      } else {
+        petEl.style.display = 'none';
+      }
+      
       render();
     }
     
@@ -1263,6 +1708,15 @@
     });
     
     document.getElementById('class-select').classList.remove('hidden');
+    
+    // 移动端触摸控制
+    function handleTouch(e, dir) {
+      e.preventDefault();
+      if (dir === 'up') move(0, -1);
+      else if (dir === 'down') move(0, 1);
+      else if (dir === 'left') move(-1, 0);
+      else if (dir === 'right') move(1, 0);
+    }
   </script>
 </body>
 </html>
