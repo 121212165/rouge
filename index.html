@@ -557,7 +557,6 @@
       'X': '#ef4444',
       'B': '#fbbf24',
       'T': '#06b6d4',
-      'E': '#dc2626',
       'K': '#22c55e',
       'M': '#ec4899',
       'P': '#14b8a6',
@@ -565,15 +564,37 @@
       'O': '#a78bfa',
       'v': '#94a3b8',
       'w': '#818cf8',
-      'y': '#4ade80'
+      'y': '#4ade80',
+      'E': '#dc2626', // 魍魉
+      'F': '#a855f7', // 幽魂
+      'H': '#ef4444', // 血魔
+      'L': '#fbbf24', // 雷灵
+      'R': '#64748b'  // 盾卫
     };
     
     const ENEMIES = {
+      // 普通敌人
       'z': { name: '僵尸', hp: 25, atk: 6, def: 0, exp: 15, gold: 8 },
       'd': { name: '毒虫', hp: 35, atk: 10, def: 3, exp: 25, gold: 15 },
       's': { name: '煞尸', hp: 50, atk: 15, def: 6, exp: 50, gold: 30 },
+      
+      // BOSS
       'D': { name: '旱魃', hp: 120, atk: 25, def: 12, exp: 300, gold: 200, isBoss: true, skills: ['喷火', '召唤'] },
-      'E': { name: '魍魉', hp: 80, atk: 18, def: 8, exp: 120, gold: 80, isElite: true, skill: '诅咒' }
+      
+      // 精英怪 - 魍魉（诅咒）
+      'E': { name: '魍魉', hp: 80, atk: 18, def: 8, exp: 120, gold: 80, isElite: true, skill: '诅咒', desc: '攻击附加诅咒' },
+      
+      // 精英怪 - 幽魂（分裂）
+      'F': { name: '幽魂', hp: 60, atk: 14, def: 4, exp: 100, gold: 60, isElite: true, skill: '分裂', desc: '死亡时分裂' },
+      
+      // 精英怪 - 血魔（瞬移）
+      'H': { name: '血魔', hp: 70, atk: 20, def: 5, exp: 110, gold: 70, isElite: true, skill: '瞬移', desc: '闪避攻击' },
+      
+      // 精英怪 - 雷灵（连锁）
+      'L': { name: '雷灵', hp: 65, atk: 22, def: 3, exp: 130, gold: 90, isElite: true, skill: '连锁', desc: '攻击可连锁' },
+      
+      // 精英怪 - 盾卫（反甲）
+      'G': { name: '盾卫', hp: 100, atk: 12, def: 15, exp: 140, gold: 100, isElite: true, skill: '反甲', desc: '反弹伤害' }
     };
     
     const ITEMS = {
@@ -879,9 +900,11 @@
         // 第10层必定有BOSS
         if (floor >= FINAL_FLOOR && i === 0) {
           type = 'D'; // 旱魃
-        } else if (floor >= 2 && floor < FINAL_FLOOR && Math.random() < 0.2) {
-          type = 'E';
-        } else if (floor >= 3 && Math.random() < 0.2) type = 'D';
+        } else if (floor >= 2 && floor < FINAL_FLOOR && Math.random() < 0.25) {
+          // 精英怪刷新（2层以上25%概率）
+          const eliteTypes = ['E', 'F', 'H', 'L', 'R'];
+          type = eliteTypes[Math.floor(Math.random() * eliteTypes.length)];
+        } else if (floor >= 3 && Math.random() < 0.15) type = 'D';
         else if (floor >= 2 && Math.random() < 0.4) type = 's';
         else if (Math.random() < 0.6) type = 'd';
         else type = 'z';
@@ -1332,6 +1355,19 @@
       enemy.hp -= dmg;
       enemy.hp -= extraDmg;
       
+      // 血魔（瞬移）- 30%闪避
+      if (enemy.skill === '瞬移' && Math.random() < 0.3) {
+        // 闪避成功，随机移动
+        let nx, ny;
+        do {
+          nx = Math.floor(Math.random() * WIDTH);
+          ny = Math.floor(Math.random() * HEIGHT);
+        } while (map[ny][nx] !== '.' || enemies.some(e => e.x === nx && e.y === ny));
+        enemy.x = nx;
+        enemy.y = ny;
+        log(`▸ ${enemy.name}瞬间移动闪避了攻击！`, 'log-combat');
+      }
+      
       // 灵兽协助攻击
       if (player.pet && enemy.hp > 0) {
         const petDmg = Math.max(1, Math.floor(player.pet.atk * 0.6));
@@ -1352,6 +1388,24 @@
         // 成就检测
         if (enemy.isElite) unlockAchievement('elite_killer');
         if (enemy.isBoss) unlockAchievement('boss_killer');
+        
+        // 精英怪特殊死亡效果
+        if (enemy.skill === '分裂' && Math.random() < 0.5) {
+          // 幽魂分裂 - 召唤两个小怪
+          for (let i = 0; i < 2; i++) {
+            let sx, sy;
+            do {
+              sx = Math.floor(Math.random() * WIDTH);
+              sy = Math.floor(Math.random() * HEIGHT);
+            } while (map[sy][sx] !== '.' || enemies.some(e => e.x === sx && e.y === sy) || (sx === player.x && sy === player.y));
+            enemies.push({ 
+              x: sx, y: sy, type: 'z', name: '游魂', 
+              hp: 15, maxHp: 15, atk: 5, def: 0, exp: 5, gold: 3,
+              isBoss: false, isElite: false
+            });
+          }
+          log(`◈ ${enemy.name}分裂成2个游魂！`, 'log-combat');
+        }
         
         // 检查是否是BOSS击败
         if (enemy.isBoss && floor >= FINAL_FLOOR) {
@@ -1452,12 +1506,30 @@
           if (curse === '血光') dmg = Math.floor(dmg * 1.2);
           if (player.cursed) dmg = Math.floor(dmg * 1.3);
           
+          // 雷灵连锁攻击 - 额外伤害
+          if (enemy.skill === '连锁') {
+            dmg = Math.floor(dmg * 1.3);
+            log(`▸ ${enemy.name}雷电连锁！伤害提升！`, 'log-damage');
+          }
+          
           if (player.guard) {
             dmg = 0;
             log(`▸ ${enemy.name}攻击，被护体格挡！`, 'log-skill');
             player.guard = false;
           } else {
             player.hp -= dmg;
+            
+            // 盾卫反甲 - 反弹伤害
+            if (enemy.skill === '反甲' && dmg > 0) {
+              const reflectDmg = Math.floor(dmg * 0.3);
+              enemy.hp -= reflectDmg;
+              log(`▸ ${enemy.name}反甲！反弹${reflectDmg}伤害！`, 'log-damage');
+              if (enemy.hp <= 0) {
+                log(`◈ 敌人被自己的反甲击杀！`, 'log-win');
+                enemies = enemies.filter(e => e !== enemy);
+              }
+            }
+            
             log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage');
           }
           
