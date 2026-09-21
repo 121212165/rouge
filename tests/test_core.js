@@ -97,8 +97,9 @@ test('网络档不阻塞回合：先按 local 行动，桥挂了计入 errors �
   const first = await jev.decide(u, w);
   assert.equal(first.path, 'advisory_pending', '第一回合答案还没回来，必须立刻动');
   assert.ok(first.action);
-  await new Promise((r) => setTimeout(r, 120));
-  await jev.decide(u, w);
+  // 后台请求何时失败取决于 OS，固定 sleep 会让本用例不稳定；轮询到 inflight 清空为止
+  const deadline = Date.now() + 3000;
+  while (jev.inflight.size && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
   assert.ok(jev.stats.errors >= 1, '桥不可用要计入 errors');
   assert.ok(jev.stats.calls >= 1, '后台确实在问');
 });
@@ -136,7 +137,14 @@ test('judge：只有合法标签 + 足够置信才采用，否则回旧规则', 
   const w = world(['#####', '#...#', '#####'], 1, 1, [unit(3, 1)]);
   const packet = { state: {}, questions: { elder: { type: 'choice', instructions: '', criteria: { transmit: 'a', heal: 'b', gamble: 'c' } } } };
   try {
-    const settle = async (j, name, pkt, legacy) => { await j.judge(name, pkt, legacy); await new Promise((r) => setTimeout(r, 20)); return j.judge(name, pkt, legacy); };
+    const settle = async (j, name, pkt, legacy) => {
+      const before = j.stats.calls;
+      await j.judge(name, pkt, legacy);
+      const deadline = Date.now() + 3000;
+      while (j.stats.calls === before && j.inflight.size && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+      while (j.inflight.size && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10));
+      return j.judge(name, pkt, legacy);
+    };
 
     globalThis.fetch = answer('heal', 0.8);
     const j1 = Client.makeClient({ mode: 'bridge', endpoint: '/x' });
