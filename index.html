@@ -95,7 +95,7 @@
       <div id="log"></div>
     </div>
   </div>
-  <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>1</kbd><kbd>2</kbd> 技能 | <kbd>R</kbd> 重新开始 | <kbd>J</kbd> 切换判断层 <span id="jev-chip" style="color:#a78bfa"></span></div>
+  <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>1</kbd><kbd>2</kbd> 技能 | <kbd>R</kbd> 重新开始 | <kbd>J</kbd> 切换判断层 | <kbd>F</kbd> 反馈 <span id="jev-chip" style="color:#a78bfa"></span></div>
   <div class="mobile-controls">
     <div class="dpad">
       <button class="dpad-btn dpad-up" ontouchstart="handleTouch(event, 'up')">↑</button>
@@ -124,11 +124,25 @@
     <div id="shop-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
     <button onclick="closeShop()" style="margin-top:20px;">离开商店</button>
   </div>
+  <div id="fb-modal" class="modal hidden">
+    <h2>☯ 反馈与诊断</h2>
+    <p id="fb-diag" style="font-size:0.5rem; color:#7dd3fc; text-align:left; background:#12121f; padding:8px; margin-bottom:8px; max-height:150px; overflow:auto;"></p>
+    <textarea id="fb-text" placeholder="遇到什么了？卡关、看不懂、报错、手感不对都行" style="width:90%; height:64px; background:#12121f; color:#e2e8f0; border:1px solid #333; padding:8px; font-family:inherit; font-size:0.6rem;"></textarea>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:10px;">
+      <button onclick="fbCopy()">复制诊断</button>
+      <button onclick="fbDownload()">下载 .json</button>
+      <button onclick="fbUpload()">上传</button>
+      <button onclick="closeFeedback()">关闭</button>
+    </div>
+    <label style="display:block; font-size:0.5rem; margin-top:10px; color:#94a3b8;"><input type="checkbox" id="fb-opt" checked onchange="fbToggle(this.checked)"> 记录本局行为数据（只存本机，含回合延迟与报错）</label>
+    <button onclick="insight.clear(); log('◈ 已清空本机诊断数据', 'log-item')" style="margin-top:6px; font-size:0.5rem;">清空数据</button>
+  </div>
   <div id="elder-modal" class="modal hidden">
     <h2>☯ 太乙长老</h2>
     <p id="elder-ask" style="font-size:0.5rem; margin-bottom:10px;"></p>
     <div id="elder-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
   </div>
+  <script src="insight.js"></script>
   <script src="jev/core.js"></script>
   <script src="jev/questions.js"></script>
   <script src="jev/policies.js"></script>
@@ -160,8 +174,10 @@
     ];
     let player, map, enemies, items, floor, logs, playerClass, curse, shopAllowed;
     let busy = false, mapVersion = 0, deathBy = null;
+    const insight = Insight.make({ endpoint: new URLSearchParams(location.search).get('tlUrl') || null });
     const QS = new URLSearchParams(location.search);
     const jev = JEVClient.makeClient({ mode: QS.get('jev') || 'local', endpoint: QS.get('jevUrl') || '/decide', stakeDelta: +(QS.get('stake') || 2) });
+    insight.bindJev(jev);
     const JEV_WORLD = { map: null, width: WIDTH, height: HEIGHT, enemies: [], player: null, floor: 1, finalFloor: FINAL_FLOOR, mapSig: 'v0' };
     function syncWorld() { JEV_WORLD.map = map; JEV_WORLD.enemies = enemies; JEV_WORLD.player = player; JEV_WORLD.floor = floor; JEV_WORLD.curseName = curse; JEV_WORLD.mapSig = 'v' + mapVersion; }
     function updateJevChip() {
@@ -171,10 +187,22 @@
     }
     function cycleJev() {
       const order = ['local', 'norule', 'auto', 'bridge', 'off'];
-      jev.cfg.mode = order[(order.indexOf(jev.cfg.mode) + 1) % order.length];
+      jev.cfg.mode = order[(order.indexOf(jev.cfg.mode) + 1) % order.length]; insight.setMode(jev.cfg.mode); insight.ev('jev_mode', { mode: jev.cfg.mode });
       jev.reset(); log(`☯ 判断层切换为 ${jev.cfg.mode}（off = 旧贪心，可对照手感差异）`, 'log-level'); updateJevChip();
     }
-    function selectClass(cls) { playerClass = cls; document.getElementById('class-select').classList.add('hidden'); initGame(); }
+    function selectClass(cls) { insight.ev('class_pick', { cls }); playerClass = cls; document.getElementById('class-select').classList.add('hidden'); initGame(); }
+    function openFeedback() {
+      const d = insight.diag();
+      document.getElementById('fb-diag').innerText = `回合延迟 p50 ${d.turn_ms ? d.turn_ms.p50 : '?'}ms / p95 ${d.turn_ms ? d.turn_ms.p95 : '?'}ms · 事件 ${d.events} 条 · 报错 ${d.errors.length} · 判断层 ${d.env.mode} · 时区 ${d.env.tz} · 存储 ${d.storage ? 'OK' : '不可用'}` + (d.errors.length ? ' ｜ ' + d.errors.map(e => e.msg).join(' ｜ ') : '');
+      document.getElementById('fb-opt').checked = insight.state.enabled;
+      document.getElementById('fb-modal').classList.remove('hidden');
+    }
+    function closeFeedback() { document.getElementById('fb-modal').classList.add('hidden'); }
+    function fbToggle(on) { insight.setEnabled(on); }
+    function fbPayload() { return JSON.stringify(insight.bundle(document.getElementById('fb-text').value), null, 1); }
+    function fbCopy() { const t = fbPayload(); insight.feedback(document.getElementById('fb-text').value); navigator.clipboard && navigator.clipboard.writeText(t).then(() => log('◈ 诊断已复制，贴到反馈帖即可', 'log-item')); }
+    function fbDownload() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([fbPayload()], { type: 'application/json' })); a.download = 'yinyang-diag-' + Date.now() + '.json'; a.click(); insight.feedback(document.getElementById('fb-text').value); }
+    function fbUpload() { if (!insight.cfg.endpoint) { log('◈ 未配置收集端，请用复制或下载', 'log-curse'); return; } insight.feedback(document.getElementById('fb-text').value); insight.upload().then((n) => log(n ? `◈ 已上传 ${n} 份诊断` : '◈ 上传失败，数据留在本机下次再试', n ? 'log-win' : 'log-curse')); }
     function showClassSelect() { document.getElementById('game-over').classList.add('hidden'); const vm = document.getElementById('victory-modal'); if (vm) vm.remove(); document.getElementById('class-select').classList.remove('hidden'); }
     function initGame() {
       jev.reset();
@@ -183,7 +211,7 @@
       player = { x: 1, y: 1, hp: s.hp, maxHp: s.maxHp, atk: s.atk, def: s.def, gold: 0, exp: 0, level: 0, expTo: 100, class: playerClass, weapon: 'fist', energy: 100, maxEnergy: 100, kills: 0, confused: false, tempBuffs: [], poison: 0, hasKey: false, cursed: false };
       floor = 1; curse = null; shopAllowed = true; deathBy = null; enemies = []; items = []; logs = [];
       document.getElementById('game-over').classList.add('hidden');
-      generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld();
+      generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld(); insight.startRun(playerClass); insight.ev('floor_enter', { floor, foes: enemies.length });
       log('☯ 欢迎来到阴阳道！击败旱魃，渡劫飞升！', 'log-item');
       renderSkills(); updateUI();
     }
@@ -251,14 +279,15 @@
       document.getElementById('game').innerHTML = output;
     }
     async function move(dx, dy) {
-      if (busy || elderPending) return;
+      if (busy || elderPending) { insight.ev('key_dropped', { why: busy ? 'busy' : 'elder' }); return; }
+      insight.markTurnStart();
       const nx = player.x + dx, ny = player.y + dy;
       if (nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT || map[ny][nx] === '#') return;
       if (map[ny][nx] === 'X') { if (curse) { curse = null; log('✦ 祭坛祈福，诅咒解除！', 'log-heal'); } else log('✦ 太乙祭坛，可解除诅咒', 'log-item'); }
       if (map[ny][nx] === 'v') { const trapDmg = 15 + Math.floor(floor * 2); deathBy = '机关陷阱'; player.hp -= trapDmg; log(`◈ 陷阱触发！损失${trapDmg}气血！`, 'log-damage'); if (player.hp <= 0) { gameOver(); return; } if (Math.random() < 0.3) map[ny][nx] = '.'; }
       if (map[ny][nx] === 'O') { map[ny][nx] = '.'; await showElderChoice(); }
       const enemy = enemies.find(e => e.x === nx && e.y === ny);
-      if (enemy) { attack(enemy); busy = true; await enemyTurn(); busy = false; updateUI(); return; }
+      if (enemy) { attack(enemy); busy = true; await enemyTurn(); busy = false; updateUI(); insight.markTurnEnd('attack'); return; }
       if (map[ny][nx] === '>') { nextFloor(); return; }
       player.x = nx; player.y = ny;
       const itemIdx = items.findIndex(i => i.x === nx && i.y === ny);
@@ -271,7 +300,7 @@
         else if (item.type === 'chest') { if (player.hasKey) { player.hasKey = false; player.gold += item.value; player.hp = Math.min(player.maxHp, player.hp + 30); log(`◈ 打开宝箱，获得${item.value}灵气和30气血！`, 'log-win'); } else { log('◈ 需要钥匙才能开启宝箱！', 'log-curse'); return; } }
         items.splice(itemIdx, 1);
       }
-      busy = true; await enemyTurn(); busy = false; updateUI();
+      busy = true; await enemyTurn(); busy = false; updateUI(); insight.markTurnEnd('move');
     }
     function attack(enemy) {
       let isCrit = player.class === '医师' && Math.random() < 0.3;
@@ -283,7 +312,7 @@
         for (let i = 0; i < 2; i++) { let sx, sy; do { sx = Math.floor(Math.random() * WIDTH); sy = Math.floor(Math.random() * HEIGHT); } while (map[sy][sx] !== '.' || enemies.some(e => e.x === sx && e.y === sy)); enemies.push({ id: 's' + (mapVersion * 50 + enemies.length) + '_' + i, x: sx, y: sy, type: 'z', name: '游魂', hp: 15, maxHp: 15, atk: 5, def: 0, exp: 5, gold: 3, isBoss: false, isElite: false, poison: 0 }); }
         log(`◈ ${enemy.name}分裂成2个游魂！`, 'log-combat');
       }
-      if (enemy.hp <= 0) { log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win'); player.kills++; player.exp += enemy.exp; player.gold += enemy.gold; enemies = enemies.filter(e => e !== enemy); if (enemy.isBoss && floor >= FINAL_FLOOR) { setTimeout(victory, 1000); return; } if (player.exp >= player.expTo) levelUp(); }
+      if (enemy.hp <= 0) { log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win'); player.kills++; insight.ev('kill', { foe: enemy.name, floor, hp: player.hp }); player.exp += enemy.exp; player.gold += enemy.gold; enemies = enemies.filter(e => e !== enemy); if (enemy.isBoss && floor >= FINAL_FLOOR) { setTimeout(victory, 1000); return; } if (player.exp >= player.expTo) levelUp(); }
     }
     function levelUp() { player.level++; player.exp -= player.expTo; player.expTo = Math.floor(player.expTo * 1.5); player.maxHp += 25; player.hp = player.maxHp; player.atk += 4; player.def += 2; log(`◈ ✦突破境界✦ 晋升${LEVELS[Math.min(player.level, LEVELS.length - 1)]}！`, 'log-level'); }
     async function enemyTurn() {
@@ -342,6 +371,7 @@
     function renderSkills() { const c = document.getElementById('skills-list'); c.innerHTML = ''; SKILLS[player.class].forEach(s => { const btn = document.createElement('button'); btn.className = 'skill-btn'; btn.id = `skill-${s.id}`; btn.innerHTML = `${s.name} <span class="skill-cost">${s.cost}</span><br><span style="color:#888">${s.desc}</span>`; btn.onclick = () => castSkill(s.id); c.appendChild(btn); }); }
     function castSkill(id) {
       const s = SKILLS[player.class].find(sk => sk.id === id); if (!s || player.energy < s.cost) { log('灵气不足！', 'log-curse'); return; } player.energy -= s.cost;
+      insight.ev('skill_cast', { skill: id, energy: player.energy });
       if (s.id === 'heal') { player.hp = Math.min(player.maxHp, player.hp + 30); log('◈ 针灸治疗，恢复30气血！', 'log-heal'); }
       else if (s.id === 'poison') { const n = nearest(); if (n) { n.poison = 5; log(`◈ 毒针命中${n.name}！`, 'log-skill'); } }
       else if (s.id === 'alchemy') { player.tempBuffs.push({ type: 'atk_mult', value: 0.5 }); log('◈ 炼丹生效，攻击力+50%！', 'log-skill'); }
@@ -352,7 +382,7 @@
     }
     function nearest() { let n = null, min = Infinity; enemies.forEach(e => { const d = Math.abs(player.x - e.x) + Math.abs(player.y - e.y); if (d < min) { min = d; n = e; } }); return n; }
     function nextFloor() { if (floor >= FINAL_FLOOR) { log('✦ 击败旱魃才能渡劫！', 'log-curse'); return; } shopAllowed = true; openShop(); }
-    function openShop() {
+    function openShop() { insight.ev('shop_open', { floor, gold: player.gold });
       if (!shopAllowed) { nextFloorAfterShop(); return; }
       document.getElementById('shop-modal').classList.remove('hidden');
       const c = document.getElementById('shop-items'); c.innerHTML = '';
@@ -372,7 +402,7 @@
       if (player.class === '炼药师') { player.hp = Math.min(player.maxHp, player.hp + 15); log('◈ 炼丹回复15气血！', 'log-skill'); }
       if (floor < FINAL_FLOOR && floor > 1 && !curse && Math.random() < 0.25) { const curses = { '血光': '受伤+20%', '灵气流失': '灵气-30%', '道心不稳': '经验+50%' }; const names = Object.keys(curses); curse = names[Math.floor(Math.random() * names.length)]; log(`⚠️ ${curse}：${curses[curse]}`, 'log-curse'); if (curse === '灵气流失') player.gold = Math.floor(player.gold * 0.7); if (curse === '道心不稳') player.expTo = Math.floor(player.expTo * 1.5); }
       player.cursed = false; log(`▸ 进入第${floor}层：敌人气血 +${floor * 5}、攻击 +${floor * 2}${floor >= FINAL_FLOOR ? '，旱魃在此' : ''}`, 'log-level');
-      generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld(); jev.reset(); updateUI();
+      generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld(); jev.reset(); insight.ev('floor_enter', { floor, foes: enemies.length, hp: player.hp, gold: player.gold, kills: player.kills }); updateUI();
     }
     const ELDER_OPTIONS = {
       transmit: { name: '传功', desc: '攻击 +3（永久）' },
@@ -399,15 +429,15 @@
       document.getElementById('elder-modal').classList.remove('hidden');
     }
     function pickElder(k) { document.getElementById('elder-modal').classList.add('hidden'); elderPending = false; applyElder(k); }
-    function applyElder(k) {
+    function applyElder(k) { insight.ev('elder_choice', { pick: k, hp_ratio: +(player.hp / player.maxHp).toFixed(2), gold: player.gold });
       if (k === 'transmit') { player.atk += 3; log('◈ 老人传授功法，攻击+3！', 'log-item'); }
       else if (k === 'heal') { player.hp = Math.min(player.maxHp, player.hp + 50); log('◈ 老人施展神通，恢复50气血！', 'log-heal'); }
       else if (Math.random() < 0.3) { curse = '道心不稳'; player.expTo = Math.floor(player.expTo * 1.5); log('◈ 考验失败！诅咒：道心不稳', 'log-curse'); }
       else { player.gold += 50; log('◈ 考验通过！获得50灵气！', 'log-item'); }
-      updateUI();
+      insight.ev('shop_buy', { item: item.name, price: item.price, gold: player.gold }); updateUI();
     }
-    function gameOver() { const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; document.getElementById('go-msg').innerText = `死于 ${deathBy || '不明'} ｜ 第${floor}层 ${realm} ｜ 灵气${player.gold}`; document.getElementById('game-over').classList.remove('hidden'); log('✦ 身死道消...', 'log-death'); }
-    function victory() {
+    function gameOver() { insight.ev('death', { cause: deathBy || '不明', floor, level: player.level, kills: player.kills, gold: player.gold, cls: player.class, jev: jev.summary() }); const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; document.getElementById('go-msg').innerText = `死于 ${deathBy || '不明'} ｜ 第${floor}层 ${realm} ｜ 灵气${player.gold}`; document.getElementById('game-over').classList.remove('hidden'); log('✦ 身死道消...', 'log-death'); }
+    function victory() { insight.ev('victory', { floor, level: player.level, kills: player.kills, gold: player.gold });
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; log(`✦ 渡劫成功！${realm}位列仙班！`, 'log-win');
       const div = document.createElement('div'); div.className = 'modal'; div.id = 'victory-modal';
       div.innerHTML = `<h2 style="color:#ffd700; font-size:1.2rem;">✦ 渡劫飞升 ✦</h2><p style="color:#7dd3fc; font-size:0.6rem; margin-bottom:10px;">恭喜渡过天劫，位列仙班！</p><div style="background:#1a1a2e; padding:15px; margin:10px 0; border:2px solid #4a4a6a;"><p style="color:#fff; font-size:0.5rem;">境界：${realm}</p><p style="color:#fff; font-size:0.5rem;">层数：第${floor}层</p><p style="color:#ffd700; font-size:0.5rem;">灵气：${player.gold}</p></div><button onclick="this.parentElement.remove();showClassSelect();">↻ 重新开始</button>`;
@@ -425,7 +455,7 @@
       document.getElementById('foes').innerText = enemies.length; document.getElementById('kills').innerText = player.kills || 0;
       updateWeaponDisplay(); render();
     }
-    document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'j') { cycleJev(); return; } const k = e.key.toLowerCase(); if (k === 'w' || k === 'arrowup') move(0, -1); else if (k === 's' || k === 'arrowdown') move(0, 1); else if (k === 'a' || k === 'arrowleft') move(-1, 0); else if (k === 'd' || k === 'arrowright') move(1, 0); else if (k === 'r') showClassSelect(); else if (k === '1' || k === '2') { const sk = SKILLS[player.class] && SKILLS[player.class][+k - 1]; if (sk) castSkill(sk.id); } });
+    document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'j') { cycleJev(); return; } const k = e.key.toLowerCase(); if (k === 'w' || k === 'arrowup') move(0, -1); else if (k === 's' || k === 'arrowdown') move(0, 1); else if (k === 'a' || k === 'arrowleft') move(-1, 0); else if (k === 'd' || k === 'arrowright') move(1, 0); else if (k === 'r') showClassSelect(); else if (k === 'f') { openFeedback(); } else if (k === '1' || k === '2') { const sk = SKILLS[player.class] && SKILLS[player.class][+k - 1]; if (sk) castSkill(sk.id); } });
     document.getElementById('class-select').classList.remove('hidden');
     function handleTouch(e, dir) { e.preventDefault(); if (dir === 'up') move(0, -1); else if (dir === 'down') move(0, 1); else if (dir === 'left') move(-1, 0); else if (dir === 'right') move(1, 0); }
   </script>

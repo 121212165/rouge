@@ -8,3 +8,5 @@ node_modules/
 __pycache__/
 *.pyc
 harness/balance.json
+dist/
+yinyang-itch.zip
