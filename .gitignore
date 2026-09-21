@@ -10,3 +10,4 @@ __pycache__/
 harness/balance.json
 dist/
 yinyang-itch.zip
+.smoke-mobile-*.png
