@@ -140,6 +140,32 @@ def main() -> int:
         if after["e"] >= before["e"]:
             failures.append(f"底部技能按钮没有生效（灵气 {before['e']} → {after['e']}）")
 
+        # 布局回归：手机上这几条一旦退化，"视图不好看"就会原样回来，而且没人会再报
+        lay = page.evaluate(r"""() => {
+          const q = (s) => document.querySelector(s);
+          const h = (s) => { const e = q(s); return e ? Math.round(e.getBoundingClientRect().height) : -1; };
+          const g = q('#game').getBoundingClientRect(), bar = q('.touch-bar').getBoundingClientRect();
+          return { stats: h('.panel-stats'), legend: h('.legend'), folded: q('#legend').classList.contains('folded'),
+                   mapH: Math.round(g.height), mapBottom: Math.round(g.bottom), barTop: Math.round(bar.top),
+                   fb: !!q('[onclick="openFeedback()"]'), toast: !!q('.mobile-toast'),
+                   dupLabel: /命格\s*命格|煞气\s*煞气/.test(document.querySelector('.panel-stats').innerText) };
+        }""")
+        print("手机布局：", lay)
+        if lay["legend"] > 90:
+            failures.append(f"图例没折叠或太高（{lay['legend']}px），会吃掉一整屏")
+        if not lay["folded"]:
+            failures.append("窄屏下图例默认应当是折叠的")
+        if lay["stats"] > 150:
+            failures.append(f"状态带 {lay['stats']}px 太高，把地图顶出首屏了")
+        if lay["mapBottom"] >= lay["barTop"]:
+            failures.append(f"地图底部 {lay['mapBottom']} 被动作条 {lay['barTop']} 压住")
+        if not lay["fb"]:
+            failures.append("手机上没有可点的反馈入口（F 键在手机上不存在）")
+        if not lay["toast"]:
+            failures.append("缺移动端日志浮条：日志面板在折叠线以下，战斗反馈看不见")
+        if lay["dupLabel"]:
+            failures.append("状态带出现重复标签（如「命格 命格 金」）")
+
         if errs:
             failures.extend(f"页面错误: {e[:160]}" for e in errs[:5])
         browser.close()

@@ -344,7 +344,77 @@ const QUESTIONS_R5 = {
   needs_confirm_step: { type: 'noul', instructions: '无论选哪种移动方案，跨多格的输入都必须先预览路径再确认，否则会因不可逆误触直接掉评分。' },
 };
 
-const PLAN = ROUND === 5
+
+/* ── 第六轮：手机视图与数据回传（用户三个具体问题，实测数字先摆出来）── */
+const FACTS_R6 = {
+  game: '阴阳道 · 回合制网格肉鸽，25x15 = 375 格，单文件 HTML，已上线 GitHub Pages（手机浏览器直接打开）',
+  measured_on_390x844: {
+    cell_px: 14, map_box: '367x220', legend_box: '367x214（与地图几乎等高）',
+    doc_height: 1683, viewport: 844, map_share_of_page: '13%',
+    panels_order: '地图 → 图例 → 状态面板 → 技能/日志面板（全在折叠线以下）',
+    touch_bar: '390x62 常驻底部，含技能×2 + 待一回合（能放，但无提示）',
+    feedback_tap_target: false, telemetry_endpoint: null,
+  },
+  hard_facts: [
+    '反馈弹窗只能用键盘 F 键打开：手机上没有任何入口，诊断数据交不回来（此前 4 个真 bug 全靠这份数据发现）',
+    '遥测只在 URL 带 ?tlUrl= 时才上传；Pages 上没人带这个参数，所以事件只堆在 localStorage',
+    '移动端移动输入已换成跟随手指的八向罗盘：不再需要点中 14px 的格子，点按精度不再是约束',
+    '回合制不可逆，但罗盘"松手才生效 + 拖回中心取消"已经把误触代价压掉了',
+  ],
+  reported_problem: '"手机版怎么提交数据 / 怎么释放技能 / 看视图不太好看"',
+  design_doctrine: 'Musk\'s Razor：手机上屏幕是最稀缺资源；不产生决策也不提供反馈的常驻 UI 应当让位给地图。',
+};
+
+const QUESTIONS_R6 = {
+  board_fit: {
+    type: 'choice',
+    instructions: '14px 格子是视图问题的根。先修哪一条？',
+    criteria: {
+      landscape: '横屏优先：844px 宽下格子约 33px，代价是要提示玩家转屏且竖屏体验变差',
+      legend_folds: '把图例折叠成一个按钮：立刻回收 214px，地图可放大到接近满屏高',
+      hud_strip: '把血/灵气/煞气/一气压成地图上方一条 40px 细带，面板移到地图下方',
+      smaller_board: '缩小地图本身（25x15 → 19x11）：格子变大但关卡结构要重做，风险最高',
+      pinch_now: '现在加双指缩放：第五轮 zoom_final=keep(0.95) 已否掉，除非有新事实',
+    },
+  },
+  legend_on_mobile: {
+    type: 'choice',
+    instructions: '图例（367x214，与地图等高）在手机上怎么处理？',
+    criteria: {
+      fold_button: '折叠：默认收起，一个"图例"按钮点开',
+      keep_short: '常驻但砍到两行（只留敌人 + 法宝品阶）',
+      first_run_only: '首局强制看完后自动折叠，之后靠按钮召回',
+      keep_as_is: '保持现状：新手不看图例就玩不动',
+    },
+  },
+  data_channel: {
+    type: 'choice',
+    instructions: '手机上怎么把诊断数据交回来？（此前 4 个真 bug 全部来自这份数据，交不回来等于瞎做）',
+    criteria: {
+      tap_entry: '给反馈一个可点入口（底部动作条或地图角落常驻小按钮），复用现有弹窗',
+      auto_endpoint: '内置一个默认遥测端点，不靠 ?tlUrl= 参数',
+      death_share: '死亡结算画面直接给"一键带走本局数据"，因为那一刻玩家最有动机',
+      screenshot_code: '生成短码让玩家截图回传：零后端，但样本量极小',
+    },
+  },
+  skill_discovery: {
+    type: 'choice',
+    instructions: '技能在手机上"能放但没人知道"，怎么办？',
+    criteria: {
+      label_hint: '按钮上直接写清"耗灵气"，并在首次获得灵气时让按钮闪一次',
+      inline: '把技能按钮挪进地图内浮层（贴着玩家），视线不用下移',
+      auto_cast: '关键技能自动释放，玩家只管走：减少操作但也减少决策',
+      first_battle_tutorial: '第一场战斗强制分步引导点一次技能和一次法宝',
+    },
+  },
+  feedback_unreachable: { type: 'noul', instructions: '当前手机玩家完全无法提交反馈与诊断数据。' },
+  map_dominates: { type: 'noul', instructions: '做完所选改动后，地图会重新成为手机第一眼的主体而不是页面的 13%。' },
+  one_screen: { type: 'noul', instructions: '改动后手机上"地图 + 必要状态 + 动作条"能同屏，不需要滚动就能开局战斗。' },
+};
+
+const PLAN = ROUND === 6
+  ? { FACTS: FACTS_R6, QUESTIONS: QUESTIONS_R6, OUT: 'mobile-view-plan.json' }
+  : ROUND === 5
   ? { FACTS: FACTS_R5, QUESTIONS: QUESTIONS_R5, OUT: 'mobile-tiebreak.json' }
   : ROUND === 4
   ? { FACTS: FACTS_R4, QUESTIONS: QUESTIONS_R4, OUT: 'mobile-plan.json' }
@@ -373,7 +443,11 @@ const { FACTS, QUESTIONS } = PLAN;
   }
   const plan = {
     round: ROUND, at: new Date().toISOString(), model: (json.usage && json.usage.model) || null, latency_ms: Date.now() - t0,
-    ...(ROUND === 5 ? {
+    ...(ROUND === 6 ? {
+      board_fit: a.board_fit?.choice, legend_on_mobile: a.legend_on_mobile?.choice,
+      data_channel: a.data_channel?.choice, skill_discovery: a.skill_discovery?.choice,
+      feedback_unreachable: a.feedback_unreachable?.noul, map_dominates: a.map_dominates?.noul, one_screen: a.one_screen?.noul,
+    } : ROUND === 5 ? {
       move_final: a.move_final?.choice, zoom_final: a.zoom_final?.choice,
       needs_confirm_step: a.needs_confirm_step?.noul,
     } : ROUND === 4 ? {

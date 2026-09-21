@@ -1,0 +1,72 @@
+{
+  "round": 6,
+  "at": "2026-09-21T14:46:54.102Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 1320,
+  "board_fit": "legend_folds",
+  "legend_on_mobile": "fold_button",
+  "data_channel": "tap_entry",
+  "skill_discovery": "label_hint",
+  "feedback_unreachable": 0.92,
+  "map_dominates": 0.58,
+  "one_screen": 0.51,
+  "raw": {
+    "board_fit": {
+      "type": "choice",
+      "choice": "legend_folds",
+      "confidence": 0.92,
+      "probabilities": {
+        "pinch_now": 0.01,
+        "smaller_board": 0,
+        "hud_strip": 0.04,
+        "legend_folds": 0.94,
+        "landscape": 0.01
+      }
+    },
+    "legend_on_mobile": {
+      "type": "choice",
+      "choice": "fold_button",
+      "confidence": 0.63,
+      "probabilities": {
+        "first_run_only": 0.04,
+        "keep_as_is": 0.21,
+        "keep_short": 0.03,
+        "fold_button": 0.72
+      }
+    },
+    "data_channel": {
+      "type": "choice",
+      "choice": "tap_entry",
+      "confidence": 0.31,
+      "probabilities": {
+        "tap_entry": 0.49,
+        "death_share": 0.04,
+        "screenshot_code": 0.01,
+        "auto_endpoint": 0.46
+      }
+    },
+    "skill_discovery": {
+      "type": "choice",
+      "choice": "label_hint",
+      "confidence": 0.58,
+      "probabilities": {
+        "first_battle_tutorial": 0.1,
+        "label_hint": 0.69,
+        "auto_cast": 0,
+        "inline": 0.21
+      }
+    },
+    "feedback_unreachable": {
+      "type": "noul",
+      "noul": 0.92
+    },
+    "map_dominates": {
+      "type": "noul",
+      "noul": 0.58
+    },
+    "one_screen": {
+      "type": "noul",
+      "noul": 0.51
+    }
+  }
+}

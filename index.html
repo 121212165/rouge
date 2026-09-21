@@ -42,6 +42,16 @@
     .legend .lg-dot { color: #2c3554; margin: 0 4px; }
     .legend .lg-arrow { color: #6d7ba4; margin: 0 3px; }
     .legend .lg-title { font-family: var(--ui); font-weight: 700; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-right: 8px; }
+    .legend .lg-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+    .legend .lg-fold { font-family: var(--ui); font-size: 11px; color: var(--cyan); background: #1d2440;
+      border: 1px solid var(--line); border-radius: 3px; padding: 2px 8px; }
+    .legend.folded .lg-body { display: none; }
+    .inline-btn { display: inline-block; font-family: var(--ui); font-size: 12px; padding: 3px 9px; margin-left: 6px;
+      background: #1d2440; border: 1px solid var(--line); border-radius: 4px; color: var(--cyan); }
+    /* 手机上日志面板在折叠线以下，战斗反馈必须能在地图旁看见 */
+    .mobile-toast { display: none; position: fixed; left: 8px; right: 8px; bottom: 72px; z-index: 65;
+      padding: 7px 10px; background: rgba(20,26,48,.95); border: 2px solid var(--line); border-radius: 6px;
+      font-size: 13px; line-height: 1.4; pointer-events: none; min-height: 20px; }
     .panel { background: var(--panel); border: 3px solid var(--line); padding: 12px 14px; width: 240px;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 4px 0 var(--deep), 0 8px 20px rgba(0, 0, 0, .45); }
     .panel h2 { color: var(--cyan); font-size: 13px; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px;
@@ -147,19 +157,35 @@
     .touch-bar button:active { background: #3b82c4; color: #fff; }
     .touch-bar button:disabled { opacity: .42; }
     .touch-bar .tb-wait { color: var(--gold); }
+    /* 技能"能放但没人知道"：第六轮 skill_discovery=label_hint 0.69 —— 写清耗灵气，并在首次放出来之前闪一次 */
+    .touch-bar .tb-pulse { border-color: var(--gold); animation: qiPulse .7s ease-in-out infinite alternate; }
     .tut-steps { display: grid; gap: 10px; max-width: 560px; margin-bottom: 18px; }
     .tut-step { background: var(--panel); border-left: 4px solid var(--cyan); padding: 10px 12px; font-size: 14px; }
     .tut-step b { color: var(--gold); display: block; margin-bottom: 3px; font-size: 15px; }
     .tut-step code { font-family: var(--map); color: var(--green); background: var(--deep); padding: 1px 5px; }
+    /* 一屏能开局战斗（Jev 第六轮 board_fit=legend_folds 0.94、legend_on_mobile=fold_button 0.72）。
+       它同时只给 one_screen 0.51 —— 所以光折叠图例不够，还要把状态压成一条细带挪到地图上方。 */
     @media (max-width: 768px) {
       .touch-bar { display: flex; }
+      .mobile-toast { display: block; }
       #game { touch-action: none; }
-      body { padding-bottom: 190px; }
-      .panel { width: 100%; max-width: 420px; }
-      #log { height: 110px; }
-      h1 { font-size: 19px; }
+      body { padding-bottom: 150px; }
+      h1 { font-size: 19px; margin-bottom: 8px; }
       .modal p { font-size: 13px; }
       .tut-step { font-size: 13px; }
+      .game-container { flex-direction: column; align-items: center; gap: 8px; }
+      .map-col { order: 2; width: min(96vw, 660px); }
+      .panel { width: min(96vw, 660px); max-width: none; }
+      .panel-stats { order: 1; padding: 8px 10px; }
+      .panel-stats h2 { display: none; }
+      .panel-stats .stat { display: inline-flex; width: auto; margin: 1px 10px 1px 0; font-size: 12px; }
+      .panel-stats .stat-more { display: none; }
+      .panel-stats .hp-bar { display: block; width: 100%; margin: 0 0 4px; }
+      .panel-stats .stat-label { margin-right: 3px; }
+      .panel-stats .weapon-display { display: inline-flex; width: auto; margin: 0 10px 0 0; padding: 2px 6px; }
+      .panel-stats .relics { display: inline; }
+      .panel-stats .relic-btn { display: none; }
+      .panel-skills { order: 3; }
     }
   </style>
 </head>
@@ -168,19 +194,23 @@
   <div class="game-container">
     <div class="map-col">
       <div id="game"></div>
-      <div class="legend" id="legend"><span class="lg-title">图例</span></div>
+      <div class="legend" id="legend">
+        <div class="lg-head" id="lg-head" onclick="toggleLegend()"><span class="lg-title">图例</span><span class="lg-fold" id="lg-fold">收起</span></div>
+        <div class="lg-body" id="lg-body"></div>
+      </div>
+      <div class="mobile-toast" id="mobile-toast"></div>
     </div>
-    <div class="panel">
+    <div class="panel panel-stats">
       <h2>▣ 状态</h2>
       <div class="hp-bar"><div class="hp-fill" id="hp-fill"></div><span class="hp-text" id="hp-text">100/100</span></div>
-      <div class="stat"><span class="stat-label">境界</span><span class="stat-value" id="level">筑基期</span></div>
-      <div class="stat"><span class="stat-label">经验</span><span class="stat-value" id="exp">0/100</span></div>
+      <div class="stat stat-more"><span class="stat-label">境界</span><span class="stat-value" id="level">筑基期</span></div>
+      <div class="stat stat-more"><span class="stat-label">经验</span><span class="stat-value" id="exp">0/100</span></div>
       <div class="stat"><span class="stat-label">攻击</span><span class="stat-value" id="attack">10</span></div>
-      <div class="stat"><span class="stat-label">防御</span><span class="stat-value" id="defense">0</span></div>
+      <div class="stat stat-more"><span class="stat-label">防御</span><span class="stat-value" id="defense">0</span></div>
       <div class="stat"><span class="stat-label">灵气</span><span class="stat-value" id="gold">0</span></div>
       <div class="stat"><span class="stat-label">层数</span><span class="stat-value" id="floor">1</span></div>
       <div class="stat"><span class="stat-label">本层余敌</span><span class="stat-value" id="foes">0</span></div>
-      <div class="stat"><span class="stat-label">击杀</span><span class="stat-value" id="kills">0</span></div>
+      <div class="stat stat-more"><span class="stat-label">击杀</span><span class="stat-value" id="kills">0</span></div>
       <div class="curse-badge" id="curse"></div>
       <div class="curse-badge" id="key-badge" style="color: #22c55e; display: none;">🔑 钥匙</div>
       <div class="weapon-display"><span class="weapon-icon" id="weapon-icon">✊</span><span class="weapon-name" id="weapon-name">徒手</span></div>
@@ -190,7 +220,7 @@
       <div class="stat"><span class="stat-label">煞气</span><span class="stat-value" id="sha-line">—</span></div>
       <div id="relics-list" class="relics"></div>
     </div>
-    <div class="panel">
+    <div class="panel panel-skills">
       <h2>▣ 技能</h2>
       <div id="skill-panel">
         <div class="stat"><span class="stat-label">灵气</span><span class="stat-value" id="energy">100/100</span></div>
@@ -200,7 +230,7 @@
       <div id="log"></div>
     </div>
   </div>
-  <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>1</kbd><kbd>2</kbd> 技能 | <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 法宝 | 手机：按住地图出罗盘 | <kbd>R</kbd> 重新开始 | <kbd>F</kbd> 反馈 | <kbd>H</kbd> 教程 <span id="jev-chip" style="color:#a78bfa"></span></div>
+  <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>1</kbd><kbd>2</kbd> 技能 | <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 法宝 | 手机：按住地图出罗盘 | <kbd>R</kbd> 重新开始 | <kbd>F</kbd> 反馈 | <kbd>H</kbd> 教程 <button class="inline-btn" onclick="openFeedback()">提交反馈与诊断</button> <span id="jev-chip" style="color:#a78bfa"></span></div>
   <div class="compass" id="compass"><div class="c-ring"></div><div class="c-hub">待</div></div>
   <div class="touch-bar" id="touch-bar"></div>
   <div id="tut-modal" class="modal hidden">
@@ -350,8 +380,22 @@
       const pad = s.bg === 'transparent' ? '' : 'padding:0 3px;border-radius:2px;';
       return `<span class="lg-k" style="color:${s.fg};background:${s.bg};${pad}${ring}">${s.g}</span><span class="lg-v">${label}</span>`;
     }
+    const LEGEND_KEY = 'yinyang.legend.folded';
+    function legendFoldedDefault() { return matchMedia('(max-width: 768px)').matches; }
+    function applyLegendFold(folded) {
+      const el = document.getElementById('legend'), tag = document.getElementById('lg-fold');
+      if (!el) return;
+      el.classList.toggle('folded', folded);
+      if (tag) tag.innerText = folded ? '展开' : '收起';
+    }
+    function toggleLegend() {
+      const folded = !document.getElementById('legend').classList.contains('folded');
+      applyLegendFold(folded);
+      try { localStorage.setItem(LEGEND_KEY, folded ? '1' : '0'); } catch (e) {}
+      insight.ev('legend_fold', { folded });
+    }
     function renderLegend() {
-      const el = document.getElementById('legend'); if (!el) return;
+      const el = document.getElementById('lg-body'); if (!el) return;
       const wx = Object.keys(GameData.WUXING).map((k) =>
         `<span class="lg-k" style="color:#0b1020;background:${GameData.WUXING_COLORS[k]};padding:0 3px;border-radius:2px;">${k}</span>`).join('');
       el.innerHTML = LEGEND.map(([title, rows]) =>
@@ -742,7 +786,8 @@
     function renderSkills() { const c = document.getElementById('skills-list'); c.innerHTML = ''; SKILLS[player.class].forEach(s => { const btn = document.createElement('button'); btn.className = 'skill-btn'; btn.id = `skill-${s.id}`; btn.innerHTML = `${s.name} <span class="skill-cost">${s.cost}</span><br><span style="color:#888">${s.desc}</span>`; btn.onclick = () => castSkill(s.id); c.appendChild(btn); }); }
     function castSkill(id) {
       const s = SKILLS[player.class].find(sk => sk.id === id); if (!s || player.energy < s.cost) { log('灵气不足！', 'log-curse'); return; } player.energy -= s.cost;
-      insight.ev('skill_cast', { skill: id, energy: player.energy });
+      player.casts = (player.casts || 0) + 1;
+      insight.ev('skill_cast', { skill: id, energy: player.energy, first: player.casts === 1 });
       if (s.id === 'heal') { player.hp = Math.min(player.maxHp, player.hp + 30); log('◈ 针灸治疗，恢复30气血！', 'log-heal'); }
       else if (s.id === 'poison') { const n = nearest(); if (n) { n.poison = 5; log(`◈ 毒针命中${n.name}！`, 'log-skill'); } }
       else if (s.id === 'alchemy') { player.tempBuffs.push({ type: 'atk_mult', value: 0.5 }); log('◈ 炼丹生效，攻击力+50%！', 'log-skill'); }
@@ -812,9 +857,9 @@
       const act = player.bag.map((b, i) => { const r = GameData.relic(b.id);
         return `<button class="relic-btn" onclick="useRelic('${r.id}')"><b>${'ZXCVBNM'[i] || '#'}</b> ${r.name} <span class="skill-cost">×${b.charges}</span><br><span style="color:#8a93ad">${r.desc}</span></button>`; }).join('');
       const pas = player.passive.map(id => { const r = GameData.relic(id); return `<span class="relic-pass" title="${r.desc}">${r.name}</span>`; }).join('');
-      c.innerHTML = (act || '<p class="hint">尚无主动法宝 —— 法宝只掉在危险处，见地图上的 ◈ ◆ ❖</p>') + (pas ? `<div class="relic-passes">被动：${pas}</div>` : '');
+      c.innerHTML = (act || '<p class="hint">主动法宝：掉在危险处的 ◈ ◆ ❖</p>') + (pas ? `<div class="relic-passes">被动：${pas}</div>` : '');
       const el = document.getElementById('element-badge');
-      if (el) { el.innerText = `命格 ${player.el}`; el.style.color = GameData.WUXING_COLORS[player.el]; }
+      if (el) { el.innerText = player.el; el.style.color = GameData.WUXING_COLORS[player.el]; }
       const ql = document.getElementById('qi-line');
       if (ql) {
         const dots = [];
@@ -961,14 +1006,14 @@
       div.innerHTML = `<h2 style="color:#ffd700; font-size:22px;">✦ 渡劫飞升 ✦</h2><p style="color:#7dd3fc; margin-bottom:10px;">恭喜渡过天劫，位列仙班！</p><div style="background:#1a1a2e; padding:15px; margin:10px 0; border:2px solid #4a4a6a;"><p style="color:#fff; ">境界：${realm}</p><p style="color:#fff; ">层数：第${floor}层</p><p style="color:#ffd700; ">灵气：${player.gold}</p></div><button onclick="this.parentElement.remove();showClassSelect();">↻ 重新开始</button>`;
       document.body.appendChild(div);
     }
-    function log(msg, cls = '') { logs.unshift({ msg, cls }); if (logs.length > 30) logs.pop(); document.getElementById('log').innerHTML = logs.map(l => `<div class="log-entry ${l.cls}">${l.msg}</div>`).join(''); }
+    function log(msg, cls = '') { logs.unshift({ msg, cls }); if (logs.length > 30) logs.pop(); document.getElementById('log').innerHTML = logs.map(l => `<div class="log-entry ${l.cls}">${l.msg}</div>`).join(''); const t = document.getElementById('mobile-toast'); if (t) { t.innerHTML = `<span class="${cls}">${msg}</span>`; } }
     function updateWeaponDisplay() { const w = WEAPONS[player.weapon]; document.getElementById('weapon-icon').innerText = w.icon; document.getElementById('weapon-name').innerText = w.name; document.getElementById('weapon-name').className = 'weapon-name rarity-' + w.rarity; }
     function updateUI() {
       document.getElementById('hp-fill').style.width = (player.hp / player.maxHp * 100) + '%'; document.getElementById('hp-text').innerText = `${player.hp}/${player.maxHp}`;
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)];
       document.getElementById('level').innerText = realm; document.getElementById('exp').innerText = `${player.exp}/${player.expTo}`; document.getElementById('attack').innerText = playerAtk(); document.getElementById('defense').innerText = playerDef(); document.getElementById('gold').innerText = player.gold; document.getElementById('floor').innerText = floor; document.getElementById('energy').innerText = `${player.energy}/${player.maxEnergy}`;
       const sb = document.getElementById('sha-line');
-      if (sb) sb.innerText = `煞气 ${player.sha}/${GameData.SHA_EVERY}`;
+      if (sb) sb.innerText = `${player.sha}/${GameData.SHA_EVERY}`;
       if (player.class) SKILLS[player.class].forEach(s => { const btn = document.getElementById(`skill-${s.id}`); if (btn) btn.disabled = player.energy < s.cost; });
       const ce = document.getElementById('curse'); if (curse) { ce.innerText = `⚠ ${curse}`; ce.style.display = 'block'; } else ce.style.display = 'none';
       document.getElementById('key-badge').style.display = player.hasKey ? 'block' : 'none';
@@ -1072,13 +1117,16 @@
       const c = document.getElementById('touch-bar'); if (!c) return;
       const bits = [];
       (SKILLS[player.class] || []).forEach((sk) => bits.push(
-        `<button onclick="castSkill('${sk.id}')"${player.energy < sk.cost ? ' disabled' : ''}>${sk.name}<small> ${sk.cost}</small></button>`));
+        `<button class="${!player.casts ? 'tb-pulse' : ''}" onclick="castSkill('${sk.id}')"${player.energy < sk.cost ? ' disabled' : ''}>${sk.name}<small> 灵气${sk.cost}</small></button>`));
       player.bag.forEach((b) => { const r = GameData.relic(b.id); bits.push(
         `<button onclick="useRelic('${r.id}')">${r.name}<small> ×${b.charges}</small></button>`); });
       bits.push('<button class="tb-wait" onclick="waitTurn()">待一回合</button>');
+      bits.push('<button onclick="openFeedback()">反馈</button>');
       c.innerHTML = bits.join('');
     }
     buildCompass();
+    let foldedPref = null; try { foldedPref = localStorage.getItem(LEGEND_KEY); } catch (e) {}
+    applyLegendFold(foldedPref == null ? legendFoldedDefault() : foldedPref === '1');
     const GAME_EL = document.getElementById('game');
     GAME_EL.addEventListener('pointerdown', onTouchDown);
     GAME_EL.addEventListener('pointermove', onTouchMove);
