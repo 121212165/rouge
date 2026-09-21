@@ -59,6 +59,22 @@ test('煞气每项都必须同时有好处和代价，否则不算构筑选择',
   }
 });
 
+test('相生环成圈、且不与相克环重合（两环混了玩家就背不住）', () => {
+  const keys = Object.keys(GD.SHENG);
+  assert.equal(keys.length, 5);
+  assert.equal(new Set(Object.values(GD.SHENG)).size, 5);
+  for (const [k, v] of Object.entries(GD.SHENG)) {
+    assert.notEqual(k, v);
+    assert.notEqual(GD.WUXING[k], v, `${k} 的相生目标不能同时是它的相克目标`);
+    assert.notEqual(GD.WUXING[v], k, `${k}→${v} 不能反过来又被 ${v} 克`);
+  }
+  // 从金出发走一圈必须回到金
+  let cur = '金';
+  for (let i = 0; i < 5; i++) cur = GD.SHENG[cur];
+  assert.equal(cur, '金', '相生链不是单个 5 环');
+  assert.ok(GD.QI_NEED >= 2 && GD.QI_NEED <= 5, `QI_NEED=${GD.QI_NEED}，2-5 之外要么白送要么攒不出来`);
+});
+
 test('三个职业都有命格五行，否则开局就有一类人吃不到克制', () => {
   const classes = [...html.matchAll(/selectClass\('([^']+)'\)/g)].map((m) => m[1]);
   assert.ok(classes.length >= 3, '没从页面里解析出职业，测试本身要修');

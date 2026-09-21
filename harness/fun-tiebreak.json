@@ -1,0 +1,54 @@
+{
+  "round": 3,
+  "at": "2026-09-21T13:35:23.579Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 1890,
+  "verb_final": "qi_chain",
+  "cut_final": "cut_none",
+  "same_round": 1.14,
+  "verb_final_clear": 0.18,
+  "raw": {
+    "verb_final": {
+      "type": "choice",
+      "choice": "qi_chain",
+      "confidence": 0.82,
+      "probabilities": {
+        "qi_chain": 0.91,
+        "terrain_bind": 0.09
+      }
+    },
+    "cut_final": {
+      "type": "choice",
+      "choice": "cut_none",
+      "confidence": 0.12,
+      "probabilities": {
+        "cut_none": 0.41,
+        "cut_elder_altar": 0.36,
+        "merge_loot": 0.23
+      }
+    },
+    "same_round": {
+      "type": "score",
+      "score": 1.14,
+      "confidence": 0.8,
+      "legend": {
+        "0": "同轮做完：两者互相成就，分开做会出现\"新玩法配旧皮肤\"的半成品期",
+        "1": "先玩法后美术：玩法没成立之前换皮是白干",
+        "2": "先美术后玩法：可读性不解决，玩家根本看不到玩法在发生",
+        "3": "拆成两轮，但先做哪一轮取决于哪一轮风险更低",
+        "4": "不确定"
+      },
+      "probabilities": {
+        "0": 0.05,
+        "1": 0.86,
+        "2": 0.02,
+        "3": 0.04,
+        "4": 0.03
+      }
+    },
+    "verb_final_clear": {
+      "type": "noul",
+      "noul": 0.18
+    }
+  }
+}

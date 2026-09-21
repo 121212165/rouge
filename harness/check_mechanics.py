@@ -103,6 +103,19 @@ SHA = """() => {
 }"""
 
 
+QI = """() => {
+  playerClass = '武痴'; initGame();
+  const mk = (el) => ({ el, type: 'z', name: el + '桩', hp: 99999, maxHp: 99999, atk: 0, def: 0, exp: 1, gold: 1, poison: 0 });
+  const steps = [];
+  for (const el of ['金', '水', '木']) { const f = mk(el); enemies = [f]; attack(f); steps.push({ el, chain: player.qi.chain.slice(), armed: player.qi.armed, lost: 99999 - f.hp }); }
+  // 接不上相生应当重开成 1 口，而不是清零——清零会让一次失误抹掉全部进度
+  player.qi.chain = []; player.qi.armed = false; qiAbsorb('金'); qiAbsorb('金');
+  const broke = player.qi.chain.slice();
+  player.qi.chain = []; qiAbsorb(null);
+  return { steps, broke, nullSafe: player.qi.chain.slice(), need: GameData.QI_NEED };
+}"""
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -151,6 +164,20 @@ def main() -> int:
             failures.append("选完之后仍然卡住输入")
         if not sh["changed"]:
             failures.append(f"选了煞气但命格和数值都没变：{sh}")
+
+        qi = page.evaluate(QI)
+        print("一气连环：", qi)
+        st = qi["steps"]
+        if [s["chain"] for s in st[:2]] != [["金"], ["金", "水"]]:
+            failures.append(f"相生链没按 金→水 续上：{st}")
+        if not (st[0] and st[1] and st[2] and st[2]["armed"] is False and st[2]["chain"] == []):
+            failures.append(f"串满 {qi['need']} 口没有引爆并清空：{st[2]}")
+        elif st[2]["lost"] < st[0]["lost"] * 2:
+            failures.append(f"引爆伤害没体现 2.2 倍：{[s['lost'] for s in st]}")
+        if qi["broke"] != ["金"]:
+            failures.append(f"断链应当重开成 1 口而不是清零：{qi['broke']}")
+        if qi["nullSafe"] != []:
+            failures.append(f"无属性目标污染了链条：{qi['nullSafe']}")
 
         if errs:
             failures.extend(f"页面错误: {e[:160]}" for e in errs[:5])

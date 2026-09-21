@@ -1,0 +1,96 @@
+{
+  "round": 2,
+  "at": "2026-09-21T13:34:09.069Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 2262,
+  "core_verb": "terrain_bind",
+  "signature_moment": "none_yet",
+  "cut_candidates": "cut_elder_altar",
+  "pacing": 1.96,
+  "ui_art_direction": "pixel_dao",
+  "readability_after": 0.78,
+  "verb_still_one": 0.87,
+  "worth_building": 0.3,
+  "raw": {
+    "core_verb": {
+      "type": "choice",
+      "choice": "terrain_bind",
+      "confidence": 0.21,
+      "probabilities": {
+        "possession": 0.13,
+        "more_content": 0.04,
+        "one_burst": 0.1,
+        "terrain_bind": 0.34,
+        "qi_chain": 0.3,
+        "time_debt": 0.09
+      }
+    },
+    "signature_moment": {
+      "type": "choice",
+      "choice": "none_yet",
+      "confidence": 0.79,
+      "probabilities": {
+        "one_hit": 0.05,
+        "gamble_call": 0.03,
+        "chain_flash": 0.05,
+        "turn_enemy": 0.04,
+        "none_yet": 0.83
+      }
+    },
+    "cut_candidates": {
+      "type": "choice",
+      "choice": "cut_elder_altar",
+      "confidence": 0.14,
+      "probabilities": {
+        "merge_loot": 0.29,
+        "cut_elder_altar": 0.31,
+        "cut_passives": 0.15,
+        "keep_all": 0.03,
+        "cut_shop": 0.22
+      }
+    },
+    "pacing": {
+      "type": "score",
+      "score": 1.96,
+      "confidence": 0.05,
+      "legend": {
+        "0": "更短（1-2 分钟一局）：招牌玩法要高频出现，靠快节奏反复触发",
+        "1": "维持现状（3-5 分钟）：不改节奏，只把决策密度提上去",
+        "2": "更长（8-15 分钟）：招牌玩法需要铺垫期，太短攒不出链/势",
+        "3": "分层：前 5 层短、后 5 层长，压力曲线递增",
+        "4": "不确定，取决于招牌玩法选哪条"
+      },
+      "probabilities": {
+        "0": 0.19,
+        "1": 0.2,
+        "2": 0.32,
+        "3": 0.04,
+        "4": 0.25
+      }
+    },
+    "ui_art_direction": {
+      "type": "choice",
+      "choice": "pixel_dao",
+      "confidence": 0.46,
+      "probabilities": {
+        "paper_cut": 0.32,
+        "glass_neon": 0,
+        "tile_relief": 0.11,
+        "ink_seal": 0,
+        "pixel_dao": 0.57
+      }
+    },
+    "readability_after": {
+      "type": "noul",
+      "noul": 0.78
+    },
+    "verb_still_one": {
+      "type": "noul",
+      "noul": 0.87
+    },
+    "worth_building": {
+      "type": "noul",
+      "noul": 0.3
+    }
+  }
+}

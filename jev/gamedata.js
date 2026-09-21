@@ -7,6 +7,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   // 金克木 木克土 土克水 水克火 火克金
   const WUXING = { 金: '木', 木: '土', 土: '水', 水: '火', 火: '金' };
+  // 相生环（一气连环用它串链）：金生水 水生木 木生火 火生土 土生金
+  const SHENG = { 金: '水', 水: '木', 木: '火', 火: '土', 土: '金' };
+  const QI_NEED = 3; // 串满 3 口入「盈」，下一击引爆。5 口一整圈太稀，Jev 判"60 秒感知不到"
   const WUXING_COLORS = { 金: '#facc15', 木: '#4ade80', 土: '#cbb28a', 水: '#60a5fa', 火: '#fb7185' };
   function elementFactor(atkEl, defEl) {
     if (!atkEl || !defEl) return 1;
@@ -54,7 +57,7 @@
   const TIER_COLORS = { 1: '#86efac', 2: '#7dd3fc', 3: '#ffd75e' };
 
   return {
-    WUXING, WUXING_COLORS, elementFactor, elementNote, CLASS_ELEMENT,
+    WUXING, SHENG, QI_NEED, WUXING_COLORS, elementFactor, elementNote, CLASS_ELEMENT,
     RELICS, TIER_NAMES, TIER_COLORS, SHA, SHA_EVERY,
     relic: (id) => RELICS.find((r) => r.id === id) || null,
   };

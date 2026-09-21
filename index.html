@@ -10,34 +10,42 @@
     :root {
       --ui: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
       --map: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
-      --ink: #e8ecf5; --ink-dim: #9aa4bf; --line: #4a5578; --panel: #161a2b; --deep: #05070f;
-      --gold: #ffd75e; --cyan: #7dd3fc; --green: #4ade80; --red: #ff7a7a; --purple: #c4a5ff;
+      --ink: #f2f5ff; --ink-dim: #93a0c4; --line: #3f4d78; --panel: #141830; --deep: #04060e;
+      --gold: #ffd75e; --cyan: #7dd3fc; --green: #4ade80; --red: #ff7a7a; --purple: #c4a5ff; --seal: #b3243a;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d1020; color: var(--ink); font-family: var(--ui); font-size: 15px; line-height: 1.5;
+    body { background: #080b16; color: var(--ink); font-family: var(--ui); font-size: 15px; line-height: 1.5;
       min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 16px 12px 24px;
-      background-image: linear-gradient(#141a2e 1px, transparent 1px), linear-gradient(90deg, #141a2e 1px, transparent 1px);
+      background-image: linear-gradient(#121a30 1px, transparent 1px), linear-gradient(90deg, #121a30 1px, transparent 1px);
       background-size: 24px 24px; }
-    h1 { color: var(--gold); font-size: 22px; font-weight: 700; letter-spacing: 3px; margin-bottom: 12px; text-shadow: 3px 3px 0 #7a1f2b; }
+    /* 标题做成朱印：印章是这套视觉里唯一允许"抢"的元素 */
+    h1 { color: #fff; font-size: 20px; font-weight: 700; letter-spacing: 6px; margin-bottom: 14px;
+      padding: 6px 14px 6px 18px; background: var(--seal); border: 2px solid #e8e1cf;
+      box-shadow: 0 3px 0 #5f1220, 0 6px 18px rgba(179, 36, 58, .35); }
     .game-container { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
     .map-col { display: flex; flex-direction: column; gap: 10px; width: min(94vw, 660px); }
     /* 地图用网格而不是 <pre> 文本流：CJK 字形在等宽字体里占两格，
-       纯文本表格无法对齐，色块会糊成锯齿。网格把"一格子=一格"交给布局保证。 */
-    #game { background: var(--deep); border: 3px solid var(--line); padding: 6px; font-family: var(--map);
+       纯文本表格无法对齐，色块会糊成锯齿。网格把"一格子=一格"交给布局保证。
+       pixel_dao 方向：每格做成立体小方块（上亮下暗），墙与地一眼分得开，不靠文字。 */
+    #game { background: #070a16; border: 3px solid var(--line); padding: 5px; font-family: var(--map);
       display: grid; grid-template-columns: repeat(25, 1fr); grid-auto-rows: 1fr;
-      aspect-ratio: 25 / 15; width: min(94vw, 660px); line-height: 1; container-type: inline-size; }
+      aspect-ratio: 25 / 15; width: min(94vw, 660px); line-height: 1; container-type: inline-size;
+      box-shadow: 0 0 0 2px var(--seal), 0 0 0 5px #101528, 0 10px 26px rgba(0, 0, 0, .55); }
     #game i { display: flex; align-items: center; justify-content: center; font-style: normal;
-      font-size: clamp(9px, 2.3vw, 18px); font-size: clamp(8px, 3.1cqw, 18px); }
+      font-size: clamp(9px, 2.3vw, 18px); font-size: clamp(8px, 3.1cqw, 18px);
+      box-shadow: inset 1px 1px 0 rgba(255, 255, 255, .10), inset -1px -1px 0 rgba(0, 0, 0, .42); }
     .legend { padding: 8px 12px; background: var(--panel); border: 2px solid var(--line);
       font-family: var(--map); font-size: clamp(10px, 2.6vw, 13px); line-height: 2; }
     .legend .lg-row { display: block; margin: 1px 0; }
     .legend .lg-k { display: inline-block; min-width: 1.4em; text-align: center; }
     .legend .lg-v { color: var(--ink-dim); margin-right: 2px; }
     .legend .lg-dot { color: #2c3554; margin: 0 4px; }
+    .legend .lg-arrow { color: #6d7ba4; margin: 0 3px; }
     .legend .lg-title { font-family: var(--ui); font-weight: 700; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-right: 8px; }
-    .panel { background: var(--panel); border: 3px solid var(--line); padding: 12px 14px; width: 240px; box-shadow: 0 4px 0 var(--deep); }
+    .panel { background: var(--panel); border: 3px solid var(--line); padding: 12px 14px; width: 240px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 4px 0 var(--deep), 0 8px 20px rgba(0, 0, 0, .45); }
     .panel h2 { color: var(--cyan); font-size: 13px; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px;
-      border-bottom: 2px dashed #2c3554; padding-bottom: 6px; }
+      border-bottom: 2px solid #2c3554; border-left: 4px solid var(--seal); padding-bottom: 6px; padding-left: 7px; margin-left: -7px; }
     .stat { display: flex; justify-content: space-between; margin: 5px 0; font-size: 14px; }
     .stat-label { color: var(--ink-dim); }
     .stat-value { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -61,6 +69,15 @@
     .relic-passes { margin-top: 7px; color: var(--ink-dim); line-height: 1.7; }
     .relic-pass { color: var(--green); margin-right: 6px; }
     .relics .hint { color: var(--ink-dim); font-size: 12px; line-height: 1.6; }
+    /* 一气连环的可见性：Jev 判 verb_final_clear 只有 0.18，所以链条本身要能当仪表读 */
+    .qi-dot { display: inline-block; min-width: 1.5em; margin-right: 3px; text-align: center;
+      border-radius: 3px; font-family: var(--map); font-size: 12px; padding: 1px 2px; }
+    .qi-empty { background: #1d2440; color: #46557d; }
+    .qi-full { color: var(--gold); margin-left: 5px; animation: qiPulse .5s ease-in-out infinite alternate; }
+    @keyframes qiPulse { from { filter: brightness(1); } to { filter: brightness(1.9); } }
+    @keyframes shake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-3px,2px); }
+      40% { transform: translate(3px,-2px); } 60% { transform: translate(-2px,-2px); } 80% { transform: translate(2px,2px); } }
+    #game.shake { animation: shake .3s steps(2, end); }
     .rarity-common { color: #b8c0d8; } .rarity-uncommon { color: var(--green); } .rarity-rare { color: var(--cyan); }
     .modal { position: fixed; inset: 0; background: rgba(4,6,14,0.94); display: flex; flex-direction: column;
       align-items: center; justify-content: center; justify-content: safe center; padding: 20px; z-index: 100; overflow-y: auto; }
@@ -152,6 +169,7 @@
       <div class="weapon-display"><span class="weapon-icon" id="weapon-icon">✊</span><span class="weapon-name" id="weapon-name">徒手</span></div>
       <h2>▣ 法宝</h2>
       <div class="stat"><span class="stat-label">命格</span><span class="stat-value" id="element-badge">—</span></div>
+      <div class="stat"><span class="stat-label">一气</span><span class="stat-value" id="qi-line">—</span></div>
       <div class="stat"><span class="stat-label">煞气</span><span class="stat-value" id="sha-line">—</span></div>
       <div id="relics-list" class="relics"></div>
     </div>
@@ -184,7 +202,8 @@
       <div class="tut-step"><b>5. 灵气 <code>$</code> 是钱</b>用来在商店买攻/防/药；技能消耗的是灵气值（右上角），两者不是一回事。</div>
       <div class="tut-step"><b>6. 描边 = 五行</b>每格的血色描边是它的命格：<code>金</code>克<code>木</code>克<code>土</code>克<code>水</code>克<code>火</code>克<code>金</code>。你克它伤害 +30%，它克你 -25% —— 打不过就换命格，别硬碰。</div>
       <div class="tut-step"><b>7. 法宝 <code>◈</code><code>◆</code><code>❖</code> 掉在危险处</b>凡品在安全角落，仙品 <code>❖</code> 只刷在精英和陷阱堆里。<u>想要好东西就得穿过敌人</u>。主动法宝按 <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 用，会消耗充能。</div>
-      <div class="tut-step"><b>8. 煞气攒满 4 点必选</b>每杀一个 +1、每下一层 +2。攒满就强制三选一，每一项都是「好处 + 代价」，并且会把你的命格五行改掉。不想要可以选「压制煞气」回 25 血。</div>
+      <div class="tut-step"><b>8. 一气连环（招牌）</b>每打中一个敌人，吸<u>它</u>的属性一口。下一口必须被上一口相生（金→水→木→火→土→金）才续得上，接不上就重开。串满 3 口，下一次攻击自动引爆：2.2 倍伤害 + 波及周围 2 格。<b>所以"先打谁、再打谁"本身就是玩法，而不是打多少下。</b></div>
+      <div class="tut-step"><b>9. 煞气攒满 4 点必选</b>每杀一个 +1、每下一层 +2。攒满就强制三选一，每一项都是「好处 + 代价」，并且会把你的命格五行改掉。不想要可以选「压制煞气」回 25 血。</div>
     </div>
     <p style="color:#9aa4bf; font-size:13px;">操作：方向键 / WASD 移动 · <b>1</b> <b>2</b> 放技能 · <b>R</b> 重开 · <b>H</b> 再看一遍本说明 · <b>F</b> 报 bug</p>
     <button onclick="closeTutorial()">开始修行</button>
@@ -246,8 +265,8 @@
     const WIDTH = 25, HEIGHT = 15, FINAL_FLOOR = 10;
     const WEAPONS = { 'fist': { name: '徒手', icon: '✊', atk: 0, rarity: 'common' }, 'sword': { name: '太极剑', icon: '⚔️', atk: 8, rarity: 'uncommon' }, 'hammer': { name: '雷锤', icon: '⚡', atk: 15, rarity: 'rare' } };
     const TILE = {
-      '#': { g: ' ', fg: 'transparent', bg: '#242c4a' },
-      '.': { g: '·', fg: '#5a6b9c', bg: '#0a1122' },
+      '#': { g: ' ', fg: 'transparent', bg: '#2b3560' },
+      '.': { g: '·', fg: '#4d5f96', bg: '#080d1c' },
       '@': { g: '☯', fg: '#0b1020', bg: '#4ade80' },
       'z': { g: '僵', fg: '#0b1020', bg: '#a3e635' }, 'g': { g: '毒', fg: '#0b1020', bg: '#fb923c' },
       's': { g: '煞', fg: '#0b1020', bg: '#e2e8f0' }, 'D': { g: '魃', fg: '#ffffff', bg: '#c026d3' },
@@ -310,6 +329,9 @@
       ['物品', [['!', '丹药'], ['$', '灵气'], ['K', '钥匙'], ['B', '宝箱'], ['⚔', '兵器']]],
       ['法宝', [['◈', '凡品'], ['◆', '灵品'], ['❖', '仙品']]],
     ];
+    const SHENG_CHAIN = ['金', '水', '木', '火', '土'].map((k) =>
+      `<span class="qi-dot" style="background:${GameData.WUXING_COLORS[k]};color:#080b16">${k}</span>`).join('<span class="lg-arrow">→</span>')
+      + '<span class="lg-arrow">→</span><span class="qi-dot" style="background:' + GameData.WUXING_COLORS['金'] + ';color:#080b16">金</span>';
     function legendChip(ch, label) {
       const s = tileStyle(ch);
       const ring = s.ring ? `box-shadow:inset 0 0 0 2px ${s.ring};` : '';
@@ -323,7 +345,8 @@
       el.innerHTML = LEGEND.map(([title, rows]) =>
         `<div class="lg-row"><span class="lg-title">${title}</span>${rows.map(([c, n]) => legendChip(c, n)).join('<span class="lg-dot">·</span>')}</div>`
       ).join('')
-        + `<div class="lg-row"><span class="lg-title">描边</span>${wx}<span class="lg-v">= 命格五行（相邻即克制 +30% / 被克 -25%）</span></div>`;
+        + `<div class="lg-row"><span class="lg-title">描边</span>${wx}<span class="lg-v">= 命格五行（相邻即克制 +30% / 被克 -25%）</span></div>`
+        + `<div class="lg-row"><span class="lg-title">一气</span>${SHENG_CHAIN}<span class="lg-v">打中的敌人给它的属性，下一口须被上一口相生，串满 ${GameData.QI_NEED} 口 → 引爆</span></div>`;
     }
     const TUT_KEY = 'yinyang.tut.v1';
     const TIP_KEY = 'yinyang.tips.v1';
@@ -393,6 +416,7 @@
         class: playerClass, weapon: 'fist', energy: 100, maxEnergy: 100, kills: 0, confused: false, tempBuffs: [],
         poison: 0, hasKey: false, cursed: false,
         el: GameData.CLASS_ELEMENT[playerClass], bag: [], passive: [], reveal: 0, rooted: 0, phase: 0,
+        qi: { chain: [], armed: false },
         mod: { atk: 0, def: 0, maxhp: 0, hp_regen: 0, gold_mult: 0, hurt_mult: 0, burn: 0, no_skill: false, exp_mult: 0, reflect: 0, shop_half: false, hp_leak: 0, pierce: 0 },
         sha: 0 };
       floor = 1; curse = null; shopAllowed = true; deathBy = null; dead = false; shopSpent = false; enemies = []; items = []; logs = [];
@@ -498,14 +522,16 @@
     }
     // 字形=是谁，描边=命格五行（金木土水火），图例与地图共用这一份派生
     function tileStyle(ch) {
-      const t = TILE[ch] || { g: ch, fg: '#ffffff', bg: 'transparent' };
+      const t = TILE[ch] || { g: ch, fg: '#fff', bg: 'transparent' };
       const el = ch === '@' ? (player && player.el) : (ENEMIES[ch] ? ENEMIES[ch].el : null);
-      return { g: t.g, fg: t.fg, bg: t.bg, ring: el ? GameData.WUXING_COLORS[el] : null };
+      return { g: t.g, fg: t.fg, bg: t.bg, ring: el ? GameData.WUXING_COLORS[el] : null,
+        pulse: ch === '@' && !!player && player.qi.armed ? GameData.WUXING_COLORS[player.qi.chain[player.qi.chain.length - 1] || player.el] : null };
     }
     function tileHtml(ch) {
       const s = tileStyle(ch);
       const ring = s.ring ? `box-shadow:inset 0 0 0 2px ${s.ring};` : '';
-      return `<i style="color:${s.fg};background:${s.bg};${ring}">${s.g}</i>`;
+      const bg = s.pulse ? `background:${s.pulse};color:#080b16;animation:qiPulse .55s ease-in-out infinite alternate;` : `background:${s.bg};`;
+      return `<i style="color:${s.fg};${bg}${ring}">${s.g}</i>`;
     }
     function render() {
       const cells = [];
@@ -569,6 +595,38 @@
       firstTip('relic', '☄ 法宝分主动/被动：主动按 Z X C 使用，会消耗充能');
       insight.ev('relic_pickup', { id, tier: r.tier, kind: r.kind, floor });
     }
+    /* ── 一气连环（Jev 第三轮 verb_final=qi_chain，0.91 / 置信 0.82）─────────
+       核心动词只有一个"撞上去打"，但命中是否"成链"取决于你挑了哪个对手、走了哪条路：
+       只有相克命中才吸气，且吸入的属性必须被上一口"相生"承接。
+       Jev 同时给了 verb_final_clear 0.18 的警告 —— 所以这一套必须靠画面而不是文字成立。 */
+    function qiAbsorb(el) {
+      if (!el) return null;
+      const q = player.qi, last = q.chain[q.chain.length - 1];
+      if (!last || GameData.SHENG[last] === el) q.chain.push(el);
+      else q.chain = [el]; // 断链重开而不是清零：给一次立刻挽回的机会
+      if (q.chain.length >= GameData.QI_NEED) q.armed = true;
+      return q.chain[q.chain.length - 1];
+    }
+    function qiBurst(enemy, dmg) {
+      const q = player.qi, el = q.chain[q.chain.length - 1];
+      q.chain = []; q.armed = false;
+      const boom = Math.floor(dmg * 2.2);
+      const hit = enemies.filter(o => o !== enemy && Math.abs(o.x - enemy.x) + Math.abs(o.y - enemy.y) <= 2);
+      enemy.hp -= boom;
+      hit.forEach(o => { o.hp -= Math.floor(boom * 0.6); });
+      flashMap(el);
+      log(`◈ ✦一气连环·${el}✦ ${boom} 爆发，波及 ${hit.length} 敌`, 'log-skill');
+      insight.ev('qi_burst', { el, dmg: boom, splash: hit.length, floor, chain: GameData.QI_NEED });
+      hit.forEach(o => { if (o.hp <= 0) slayEnemy(o, '被一气连环扫灭'); });
+      if (enemy.hp <= 0) slayEnemy(enemy, '被一气连环击穿');
+      return true;
+    }
+    function flashMap(el) {
+      const g = document.getElementById('game'); if (!g) return;
+      g.style.boxShadow = `0 0 0 3px ${GameData.WUXING_COLORS[el]}, 0 0 26px ${GameData.WUXING_COLORS[el]}`;
+      g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
+      setTimeout(() => { g.style.boxShadow = ''; g.classList.remove('shake'); }, 320);
+    }
     function attack(enemy) {
       let isCrit = player.class === '医师' && Math.random() < 0.3;
       let baseAtk = playerAtk(); player.tempBuffs.forEach(b => { if (b.type === 'atk_mult') baseAtk = Math.floor(baseAtk * (1 + b.value)); });
@@ -578,6 +636,9 @@
       let dmg = Math.max(1, Math.floor((baseAtk - Math.max(0, enemy.def) * (1 - pierce)) * pf));
       if (isCrit) { dmg = Math.floor(dmg * 1.5); log(`◈ ✦针灸暴击✦ 对${enemy.name}造成${dmg}伤害！`, 'log-skill'); } else { const pn = GameData.elementNote(myEl, enemy.el); log(`◈ 攻击${enemy.name}，${dmg}伤害！${pn ? '（' + pn + '）' : ''}${pierce > 0 ? '（破防）' : ''}`, 'log-combat'); }
       if (player.mod.burn && enemy.hp > dmg) { enemy.burn = 3; log(`◈ 火煞焚经：${enemy.name}灼烧 3 回合`, 'log-skill'); }
+      // 吸的是"这一拳打在谁身上"的目标属性：串链顺序 = 出手顺序，挑对手本身就是玩法
+      qiAbsorb(enemy.el);
+      if (player.qi.armed) { firstTip('qi', '☄ 一气连环：每打一个敌人吸它的属性，下一口要被上一口相生（金→水→木→火→土→金）才续得上，串满 3 口自动引爆'); qiBurst(enemy, dmg); return; }
       enemy.hp -= dmg;
       if (enemy.skill === '分裂' && enemy.hp <= 0 && Math.random() < 0.5) {
         for (let i = 0; i < 2; i++) { let sx, sy; do { sx = Math.floor(Math.random() * WIDTH); sy = Math.floor(Math.random() * HEIGHT); } while (map[sy][sx] !== '.' || enemies.some(e => e.x === sx && e.y === sy)); enemies.push({ id: 's' + (mapVersion * 50 + enemies.length) + '_' + i, x: sx, y: sy, type: 'z', el: ENEMIES['z'].el, name: '游魂', hp: 15, maxHp: 15, atk: 5, def: 0, exp: 5, gold: 3, isBoss: false, isElite: false, poison: 0 }); }
@@ -742,6 +803,16 @@
       c.innerHTML = (act || '<p class="hint">尚无主动法宝 —— 法宝只掉在危险处，见地图上的 ◈ ◆ ❖</p>') + (pas ? `<div class="relic-passes">被动：${pas}</div>` : '');
       const el = document.getElementById('element-badge');
       if (el) { el.innerText = `命格 ${player.el}`; el.style.color = GameData.WUXING_COLORS[player.el]; }
+      const ql = document.getElementById('qi-line');
+      if (ql) {
+        const dots = [];
+        for (let i = 0; i < GameData.QI_NEED; i++) {
+          const e2 = player.qi.chain[i];
+          dots.push(e2 ? `<span class="qi-dot" style="background:${GameData.WUXING_COLORS[e2]};color:#080b16">${e2}</span>`
+                       : '<span class="qi-dot qi-empty">○</span>');
+        }
+        ql.innerHTML = dots.join('') + (player.qi.armed ? '<b class="qi-full">盈</b>' : '');
+      }
     }
 
     /* 煞气入体：每 6 杀强制三选一，每项都同时给好处和代价，并改写命格五行。 */
