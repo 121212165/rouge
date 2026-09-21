@@ -1,0 +1,81 @@
+{
+  "round": 4,
+  "at": "2026-09-21T14:00:12.023Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 1888,
+  "move_scheme": "drag_path",
+  "secondary_actions": "bottom_bar",
+  "wait_turn": "tap_self",
+  "board_zoom": "keep",
+  "misinput_risk": 0.58,
+  "one_handed": 0.36,
+  "older_than_tap": 0.33,
+  "impl_one_round": 0.6,
+  "raw": {
+    "move_scheme": {
+      "type": "choice",
+      "choice": "drag_path",
+      "confidence": 0.21,
+      "probabilities": {
+        "swipe_dir": 0.02,
+        "tap_adjacent": 0.1,
+        "keep_dpad": 0.32,
+        "tap_path": 0.15,
+        "floating_stick": 0.01,
+        "drag_path": 0.33,
+        "radial_hold": 0.07
+      }
+    },
+    "secondary_actions": {
+      "type": "choice",
+      "choice": "bottom_bar",
+      "confidence": 0.67,
+      "probabilities": {
+        "edge_gesture": 0,
+        "right_rail": 0.02,
+        "radial_menu": 0.05,
+        "context_button": 0.19,
+        "bottom_bar": 0.74
+      }
+    },
+    "wait_turn": {
+      "type": "choice",
+      "choice": "tap_self",
+      "confidence": 0.54,
+      "probabilities": {
+        "drop": 0.06,
+        "swipe_back": 0,
+        "double_tap": 0.01,
+        "explicit_btn": 0.29,
+        "tap_self": 0.64
+      }
+    },
+    "board_zoom": {
+      "type": "choice",
+      "choice": "keep",
+      "confidence": 0.13,
+      "probabilities": {
+        "pinch": 0.08,
+        "bigger_scroll": 0.23,
+        "auto_focus": 0.34,
+        "keep": 0.35
+      }
+    },
+    "misinput_risk": {
+      "type": "noul",
+      "noul": 0.58
+    },
+    "one_handed": {
+      "type": "noul",
+      "noul": 0.36
+    },
+    "older_than_tap": {
+      "type": "noul",
+      "noul": 0.33
+    },
+    "impl_one_round": {
+      "type": "noul",
+      "noul": 0.6
+    }
+  }
+}

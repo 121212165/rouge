@@ -1,0 +1,37 @@
+{
+  "round": 5,
+  "at": "2026-09-21T14:00:27.866Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 973,
+  "move_final": "radial_hold",
+  "zoom_final": "keep",
+  "needs_confirm_step": 0.61,
+  "raw": {
+    "move_final": {
+      "type": "choice",
+      "choice": "radial_hold",
+      "confidence": 0.82,
+      "probabilities": {
+        "tap_path": 0,
+        "swipe_dir": 0.12,
+        "drag_path": 0.01,
+        "radial_hold": 0.87
+      }
+    },
+    "zoom_final": {
+      "type": "choice",
+      "choice": "keep",
+      "confidence": 0.93,
+      "probabilities": {
+        "pinch": 0,
+        "keep": 0.95,
+        "auto_focus": 0.04,
+        "bigger_scroll": 0.01
+      }
+    },
+    "needs_confirm_step": {
+      "type": "noul",
+      "noul": 0.61
+    }
+  }
+}

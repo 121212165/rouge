@@ -238,10 +238,119 @@ const QUESTIONS_R3 = {
   verb_final_clear: { type: 'noul', instructions: '选定的招牌玩法在 60 秒内可被无教程玩家感知。' },
 };
 
-const PLAN = ROUND === 3
+
+/* ── 第四轮：手机端交互（用户："点击太老了"）──────────────────────────
+   判据先给外部事实，再让模型在候选里选；候选由我按本仓的回合制不可逆性生成。 */
+const FACTS_R4 = {
+  game: '阴阳道 · 回合制肉鸽地牢，25x15 网格，浏览器单文件 HTML（无框架、无构建、无手势库）',
+  mobile_current: '屏幕下方固定十字虚拟键（↑←↓→），点一次走一步；地图在 390px 视口下每格约 26px',
+  hard_constraints: [
+    '回合制不可逆：每走一步所有敌人才动一步，误触一步可能直接换来一次死亡，不能靠"撤销"兜底',
+    '撞上敌人即攻击，没有独立攻击键；踩楼梯即进入商店并强制下潜，回不来',
+    '已上线 GitHub Pages，玩家用手机浏览器直接打开，不装 App',
+  ],
+  board_metrics: { cells: '25x15 = 375 格', cell_px_at_390: 26, thumb_target_recommended_min_px: 44,
+    consequence: '整屏同时只显示 1 个玩家 + 最多 11 个敌人 + 若干掉落，一屏全图可见，无需滚动' },
+  external_evidence: [
+    'Shattered Pixel Dungeon v4.0.0（2026-09-09，移动端网格肉鸽的参照物）至今仍是 tap-to-move 为主，没有改成摇杆或手势',
+    '但 2026-02 有玩家开帖问 "Is there an alternative to tap to move?"：主流方案并非无人抱怨',
+    'MDN 移动端触控文档（2025-07 更新）与 Unity/GDevelop 的通行建议一致：触屏方向输入要么给可见锚点，要么给即时回显，纯隐形手势误判率高',
+    '虚拟摇杆在 Unity/UX 社区长期被批"手感差"，主要问题是中性区抖动与拇指遮挡，而非概念本身',
+  ],
+  reported_problem: '"手机版换交互方式，点击太老了"',
+  design_doctrine: 'Musk\'s Razor：换交互必须减少"想到—做到"之间的摩擦或增加可控性；只是看起来更炫的输入一律不采纳。',
+};
+
+const QUESTIONS_R4 = {
+  move_scheme: {
+    type: 'choice',
+    instructions: '替换屏幕十字键的移动方案，选哪一个？只依据给定事实判断，不要臆测未提供的信息。',
+    criteria: {
+      tap_path: '点任意可达格 → 自动寻路逐格走过去（每格消耗一回合，途中可再点打断）：Shattered PD 同款',
+      swipe_dir: '在地图上朝四向滑动 = 走一步，连续快滑 = 连续走；手指不遮挡地图中心',
+      drag_path: '按住拖出一条折线轨迹，松手按轨迹逐格走；路径实时高亮，走前可看清每一步',
+      radial_hold: '长按任意位置弹出四/八向罗盘，滑到方向松手；方向键跟着手指出现在屏幕任意位置',
+      floating_stick: '浮动摇杆：手指落点即摇杆原点，按倾角决定方向与连走步数',
+      tap_adjacent: '只允许点相邻格（把地图本身当方向键），远处目标不支持一步直达',
+      keep_dpad: '保留固定十字键，只把它做小、做半透明、挪到拇指热区',
+    },
+  },
+  secondary_actions: {
+    type: 'choice',
+    instructions: '技能（2 个）、法宝（最多 3 个主动）、引爆/等待这些非移动操作，在手机上放哪？',
+    criteria: {
+      bottom_bar: '底部工具条：移动区与动作区分层，动作按钮固定可肌肉记忆',
+      right_rail: '右侧竖排浮动按钮：拇指自然落点，但会遮地图右半边',
+      radial_menu: '长按地图弹罗盘，方向=移动、中心=动作菜单：屏最干净，但藏得深',
+      edge_gesture: '边缘手势（右滑技能、上滑法宝）：无按钮，但完全不可见、依赖记忆',
+      context_button: '只保留一个"上一件用过的事"智能按钮，其余收进可展开抽屉',
+    },
+  },
+  wait_turn: {
+    type: 'choice',
+    instructions: '回合制里"原地等待/观察"是刚需（等敌人走过来占位）。手机上怎么给？',
+    criteria: {
+      explicit_btn: '一个明确的"待一回合"按钮',
+      double_tap: '双击地图空地 = 等待',
+      tap_self: '点自己脚下那格 = 等待（与 tap_path 天然一致）',
+      swipe_back: '朝来路方向滑动 = 等待兼后退',
+      drop: '不提供：本作没有需要等待的实时要素',
+    },
+  },
+  board_zoom: {
+    type: 'choice',
+    instructions: '390px 视口下每格 26px，低于通行 44px 拇指目标。怎么办？',
+    criteria: {
+      keep: '不动：一屏全图可见比格子大小更重要，靠手势精度而不是点击精度绕开',
+      pinch: '支持双指缩放 + 拖动视口：小图看全局，放大点格子',
+      bigger_scroll: '默认放大到 44px，地图超出屏幕则允许滚动，玩家自己挪视野',
+      auto_focus: '自动放大到玩家周围 15x9 区域，远处只留小地图',
+    },
+  },
+  misinput_risk: { type: 'noul', instructions: '所选移动方案在不可逆的回合制里会造成"手指滑过头/点错格"这类无法挽回的误操作。' },
+  one_handed: { type: 'noul', instructions: '单手拇指可以完成本作的全部操作（移动、技能、法宝、弹窗选择）。' },
+  older_than_tap: { type: 'noul', instructions: '所选方案真的比现在的固定十字键更现代，而不只是把同样的点击换了个手势外壳。' },
+  impl_one_round: { type: 'noul', instructions: '这套交互能在一次迭代内用原生 JS + Pointer Events 做完，并通过本仓的确定性闸门。' },
+};
+
+/* ── 第五轮：第四轮若没收敛，两两对决 + 换成"误触代价"判据 ── */
+const FACTS_R5 = {
+  ...FACTS_R4,
+  round4_result: '见 harness/mobile-plan.json；未收敛的候选进入本轮两两对决',
+  tiebreak_rule: '回合制不可逆 → 判据从"哪个更现代"换成"哪个错了还能救"：误触后玩家有没有机会在敌人行动前停下',
+};
+
+const QUESTIONS_R5 = {
+  move_final: {
+    type: 'choice',
+    instructions: '两两对决。判据只用一条：手指滑过头或点错时，玩家还有没有机会止损。',
+    criteria: {
+      tap_path: '点格自动寻路（一次输入 = 多步，途中每步都会推进回合）',
+      swipe_dir: '四向滑动走一步（一次输入 = 一步，随时可停）',
+      drag_path: '拖折线再走（走前可看清整条路径，但一次输入 = 多步）',
+      radial_hold: '长按弹罗盘（松手才生效，按住期间可反悔）',
+    },
+  },
+  zoom_final: {
+    type: 'choice',
+    instructions: '两两对决。判据只用一条：哪个更不容易让玩家"看不清敌人从哪来"。',
+    criteria: {
+      keep: '保持一屏全图',
+      pinch: '双指缩放 + 拖动视口',
+      bigger_scroll: '放大到 44px 并允许滚动',
+      auto_focus: '自动聚焦玩家周围 + 小地图',
+    },
+  },
+  needs_confirm_step: { type: 'noul', instructions: '无论选哪种移动方案，跨多格的输入都必须先预览路径再确认，否则会因不可逆误触直接掉评分。' },
+};
+
+const PLAN = ROUND === 5
+  ? { FACTS: FACTS_R5, QUESTIONS: QUESTIONS_R5, OUT: 'mobile-tiebreak.json' }
+  : ROUND === 4
+  ? { FACTS: FACTS_R4, QUESTIONS: QUESTIONS_R4, OUT: 'mobile-plan.json' }
+  : ROUND === 3
   ? { FACTS: FACTS_R3, QUESTIONS: QUESTIONS_R3, OUT: 'fun-tiebreak.json' }
-  : ROUND === 2
-  ? { FACTS: FACTS_R2, QUESTIONS: QUESTIONS_R2, OUT: 'fun-plan.json' }
+  : ROUND === 2  ? { FACTS: FACTS_R2, QUESTIONS: QUESTIONS_R2, OUT: 'fun-plan.json' }
   : { FACTS: FACTS_R1, QUESTIONS: QUESTIONS_R1, OUT: 'design-plan.json' };
 const { FACTS, QUESTIONS } = PLAN;
 
@@ -264,7 +373,15 @@ const { FACTS, QUESTIONS } = PLAN;
   }
   const plan = {
     round: ROUND, at: new Date().toISOString(), model: (json.usage && json.usage.model) || null, latency_ms: Date.now() - t0,
-    ...(ROUND === 3 ? {
+    ...(ROUND === 5 ? {
+      move_final: a.move_final?.choice, zoom_final: a.zoom_final?.choice,
+      needs_confirm_step: a.needs_confirm_step?.noul,
+    } : ROUND === 4 ? {
+      move_scheme: a.move_scheme?.choice, secondary_actions: a.secondary_actions?.choice,
+      wait_turn: a.wait_turn?.choice, board_zoom: a.board_zoom?.choice,
+      misinput_risk: a.misinput_risk?.noul, one_handed: a.one_handed?.noul,
+      older_than_tap: a.older_than_tap?.noul, impl_one_round: a.impl_one_round?.noul,
+    } : ROUND === 3 ? {
       verb_final: a.verb_final?.choice, cut_final: a.cut_final?.choice,
       same_round: a.same_round?.score, verb_final_clear: a.verb_final_clear?.noul,
     } : ROUND === 2 ? {

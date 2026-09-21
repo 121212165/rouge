@@ -38,7 +38,11 @@ function deterministicChecks() {
     { id: 'baseline_frozen', what: '消融基线未被顺手改坏（open_direct 仍第 5 回合）', ok: frozenBaseline },
     { id: 'no_native_dialogs', what: '无 confirm()/alert()（移动端与上架包体要求）', ok: count(html, /\b(confirm|alert)\s*\(/g) === 0 },
     { id: 'viewport', what: '有 viewport meta', ok: /name="viewport"/.test(html) },
-    { id: 'touch', what: '有触屏方向键', ok: /handleTouch\(/.test(html) },
+    // 触屏：Jev 第四/五轮把固定十字键换成跟随手指的八向罗盘（move_final=radial_hold 0.87）。
+    // 旧十字键必须"真的没了"，不然只是多一套按钮、拇指热区反而更挤。
+    { id: 'touch', what: '触屏是跟随手指的八向罗盘 + 底部动作条，且旧十字键已移除',
+      ok: /buildCompass\(/.test(html) && /renderTouchBar\(/.test(html) && !/dpad-btn/.test(html) && /OCT\.length === 8|const OCT = \[/.test(html) },
+    { id: 'touch_playable', what: '真 touch 事件回归（拖向走一格 · 斜向生效 · 回中心取消 · 点脚下等待）', ok: run('py -3.12 harness/check_touch.py').ok },
     { id: 'offline_playable', what: '默认档不依赖网络（mode=local 且无 fetch 才玩得动）', ok: /QS.get\('jev'\) \|\| 'local'/.test(html) },
     { id: 'size', what: `核心包体 < ${SIZE_BUDGET_KB}KB（实测 ${kb.toFixed(1)}KB）`, ok: kb < SIZE_BUDGET_KB },
     { id: 'no_secrets', what: '发布文件里不含密钥', ok: !leak },
@@ -74,6 +78,7 @@ function buildEvidence(checks, kb, balance) {
     hud_fields: [...html.matchAll(/class="stat-label">([^<]+)</g)].map((m) => m[1]),
     difficulty_formula: '每层敌人 气血 +floor*5、攻击 +floor*2；第 2 层起 20% 概率出精英；第 10 层固定旱魃 + 小怪；持聚宝盆则每层 +2 只',
     ai_skill_timing: 'off = 旧随机；local/norule = 确定性规则（够得着喷火、够不着召唤、未被诅咒立刻下咒）；auto/bridge = 交 Jev 判',
+    touch_scheme: '八向跟随罗盘（按住 130ms 或拖动 10px 弹出，松手才生效，拖回中心=待一回合）+ 底部动作条放技能/法宝/等待；旧固定十字键已删除',
     mechanics: ['10 层地牢 + 随机房间路网', '3 职业各 2 主动技能（灵气资源）', '五行命格：金→木→土→水→火→金，克 +30% / 被克 -25%，描边即属性', '10 件法宝（5 主动带充能 / 5 被动改规则），按风险定价掉落：实测凡品落点危险度 0.9、灵品 2.3、仙品 4.4', '煞气构筑：每 6 杀强制三选一，8 种异变每项都同时给好处和代价并改写命格', '3 精英：诅咒/分裂/反甲', 'BOSS 旱魃：喷火/召唤，半血触发', '太乙祭坛解咒 · 陷阱可见 · 钥匙开宝箱', '每层一次商店（攻/防/药三选）', '长老三选机缘（传功/疗伤/考验）', '永久死亡，无存档'],
     ai_ablation: { note: '7 条手搭夹具，同路网同接战半径，只比决策质量', old_greedy_never_reaches_player: 3, judgment_layer_reaches: 5, self_kill_old_vs_new: '5 → 0', real_model_vs_local_outcome: '7/7 条贴脸回合数完全相同', cost_of_asking_model: '单条夹具最多 118 次调用 / 85266 输入 token，换到同一个结果' },
     bot_playthroughs: balance ? { games: balance.games, policy: balance.policy, deaths: balance.deaths, death_causes: balance.death_causes, wins: balance.wins, softlocks: balance.softlocks, floor_avg: balance.floor_reached_avg, floor_max: balance.floor_reached_max, input_blocked_pct: balance.input_blocked_pct, deaths_on_floor_1: balance.died_on_floor_1 } : null,
