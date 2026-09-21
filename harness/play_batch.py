@@ -22,17 +22,22 @@ STEP = """() => {
   if (shop && !shop.classList.contains('hidden')) return { key: 'shop' };
   const elder = document.getElementById('elder-modal');
   if (elder && !elder.classList.contains('hidden')) return { key: 'elder' };
+  const draft = document.getElementById('draft-modal');
+  if (draft && !draft.classList.contains('hidden')) return { key: 'draft' };
   const over = document.getElementById('game-over');
   if (over && !over.classList.contains('hidden')) return { over: true, dead: true, floor, deathBy };
   if (document.getElementById('victory-modal')) return { over: true, dead: false, won: true, floor, deathBy };
   if (player.hp <= 0) return { over: true, dead: true, floor, deathBy };
+  // busy 时按键一定被吞：这一项就是闸门里的"输入被阻塞率"，不能靠事后猜
+  if (busy) return { blocked: true, key: 'w' };
   const alive = enemies.filter(e => e.hp > 0);
   let exit = null;
   for (let y = 0; y < HEIGHT && !exit; y++) for (let x = 0; x < WIDTH; x++) if (map[y][x] === '>') { exit = { x, y }; break; }
   const near = exit || alive.reduce((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) < (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)) ? a : b, null);
   if (!near) return { stuck: true, key: 'w' };
   // BFS 最短路：机器人也不能靠"朝目标挪一格"走迷宫（这正是旧敌人 AI 卡死的同一个坑）
-  const dirs = [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[1,1],[-1,1],[-1,-1]];
+  // 只用四向：游戏本身只有四向移动，八向路径的首步若是斜格，映射成 WASD 后会撞墙空转
+  const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
   const seen = new Set([player.x + ',' + player.y]);
   let frontier = [[player.x, player.y, null]];
   let first = null;
@@ -72,26 +77,39 @@ STEP = """() => {
 }"""
 
 SNAPSHOT = """() => ({ class: player.class, floor, hp: player.hp, maxHp: player.maxHp, gold: player.gold, level: player.level,
+            kills: player.kills, sha: player.sha, relics: player.passive.length + player.bag.length,
             deathBy, dead: player.hp <= 0, enemies: enemies.length, items: items.length })"""
 
 
 CLASSES = [0, 1, 2]  # 按 .class-card 序号点，避免 emoji 可及名称对不上
+
+DISMISS = """() => {
+  const open = (id) => !document.getElementById(id).classList.contains('hidden');
+  if (open('tut-modal')) { closeTutorial(); return true; }
+  return false;
+}"""
 
 
 def play(page, cls: int) -> dict:
     page.goto(f"{BASE}/?jev=norule", wait_until="load")
     page.locator(".class-card").nth(cls).click()
     page.wait_for_timeout(120)
+    # 首访必弹教程，它会吃掉所有按键；不点掉的话整局都在测弹窗
+    while page.evaluate(DISMISS):
+        page.wait_for_timeout(40)
     stuck = 0
     blocked = 0
     pressed = 0
+    drafts = 0
+    spin = 0
+    prev_state = None
     for step in range(900):
         act = page.evaluate(STEP)
         if act.get("over"):
-            return {**page.evaluate(SNAPSHOT), "won": act.get("won", False), "steps": step, "stuck": stuck, "blocked": blocked, "pressed": pressed}
+            return {**page.evaluate(SNAPSHOT), "won": act.get("won", False), "steps": step, "stuck": stuck, "blocked": blocked, "pressed": pressed, "drafts": drafts}
         if act["key"] == "shop":
             # 有钱先买血药：不购物的机器人测不出商店这一层取舍是否成立
-            page.evaluate("""() => { const it = SHOP_ITEMS.find(i => i.effect.type === 'heal' && player.gold >= i.price && player.hp < player.maxHp); if (it) buyItem(it); }""")
+            page.evaluate("""() => { const it = SHOP_ITEMS.find(i => i.effect.type === 'heal' && player.gold >= shopPrice(i) && player.hp < player.maxHp); if (it) buyItem(it); }""")
             page.get_by_role("button", name="离开商店").click()
             page.wait_for_timeout(30)
             continue
@@ -99,10 +117,29 @@ def play(page, cls: int) -> dict:
             page.evaluate("() => pickElder('transmit')")
             page.wait_for_timeout(30)
             continue
+        if act["key"] == "draft":
+            # 煞气三选：机器人固定拿第一张，测的是"这个弹窗会不会把局卡住"，不是选得对不对
+            drafts += 1
+            page.evaluate("() => { const o = document.querySelector('#draft-items .shop-item'); if (o) o.click(); }")
+            page.wait_for_timeout(30)
+            continue
+        if act.get("blocked"):
+            blocked += 1
+            page.wait_for_timeout(10)
+            continue
         if act.get("stuck"):
             stuck += 1
             if stuck > 8:
-                return {**page.evaluate(SNAPSHOT), "won": False, "steps": step, "stuck": stuck, "blocked": blocked, "pressed": pressed, "softlock": True}
+                return {**page.evaluate(SNAPSHOT), "won": False, "steps": step, "stuck": stuck, "blocked": blocked, "pressed": pressed, "drafts": drafts, "softlock": True}
+        # 状态完全没推进 = 这一局在空转。不记下来的话，floor 均值会被 900 步的假数据稀释
+        now = (act.get("key"), page.evaluate("() => [player.x, player.y, player.hp, enemies.length, floor].join(',')"))
+        if now == prev_state:
+            spin += 1
+            if spin > 60:
+                return {**page.evaluate(SNAPSHOT), "won": False, "steps": step, "stuck": stuck, "blocked": blocked, "pressed": pressed, "drafts": drafts, "spin": spin, "softlock": True}
+        else:
+            spin = 0
+        prev_state = now
         if act["key"] == "wait":
             page.wait_for_timeout(10)
             continue
@@ -112,7 +149,7 @@ def play(page, cls: int) -> dict:
         pressed += 1
         page.wait_for_timeout(10)
     snap = page.evaluate(SNAPSHOT)
-    return {**snap, "won": False, "steps": 900, "stuck": stuck, "blocked": blocked, "pressed": pressed, "timeout": True}
+    return {**snap, "won": False, "steps": 900, "stuck": stuck, "blocked": blocked, "pressed": pressed, "drafts": drafts, "timeout": True}
 
 
 def main() -> int:
@@ -139,8 +176,10 @@ def main() -> int:
         "floor_reached_avg": round(sum(g["floor"] for g in games) / len(games), 2),
         "floor_reached_max": max(g["floor"] for g in games),
         "died_on_floor_1": sum(1 for g in dead if g["floor"] == 1),
-        "input_blocked_pct": round(100 * sum(g.get("blocked", 0) for g in games) / max(1, sum(g.get("pressed", 0) for g in games)), 2),
-        "games": len(games),
+        "input_blocked_pct": round(100 * sum(g.get("blocked", 0) for g in games) / max(1, sum(g.get("blocked", 0) + g.get("pressed", 0) for g in games)), 2),
+        "sha_drafts_seen": sum(g.get("drafts", 0) for g in games),
+        "kills_avg": round(sum(g.get("kills", 0) for g in games) / len(games), 2),
+        "relics_avg": round(sum(g.get("relics", 0) for g in games) / len(games), 2),
         "runs": games,
     }
     OUT.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

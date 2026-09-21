@@ -36,8 +36,9 @@
 - `questions.js` — typed 问题包 + "代码决定何时问"（超出接战半径或无可选项就不发请求）。
 - `policies.js` — `baseline` / `local` / `gate`。`gate` 是纯函数，可用合成答案离线单测。
 - `client.js` — 三档出口、置信度门、指纹复用、执行前重校验、遥测与降级计数。
+- `gamedata.js` — 五行相克环、10 件法宝、8 种煞气异变与品阶表。纯数据、浏览器与 Node 同构，渲染/结算/图例/掉落共用这一份。
 - `../jev_bridge.py` — 静态服务器 + `/decide`，上游可切 `adapter`（开源 drop-in）/ `typesafe`（官方云）/ `stub`（零 key 验管道）。
-- `../harness/` — 夹具与消融跑器、浏览器冒烟。
+- `../harness/` — 夹具与消融跑器、浏览器冒烟、机制回归（`check_mechanics.py`）、设计议会（`design_council.js`）、截图（`shot.py`）。
 
 ## 从 JEV 生态普查（B2 游戏/实时决策批）搬来的五件事
 
@@ -53,6 +54,33 @@
 
 没搬的：ultrafast 的"单样本换延迟"用在评测采样上（我们要的是稳定校准分数）；
 指纹复用在盲审协议里（会污染独立性）——这里只用于生产 gate。
+
+## 内容扩充这一轮：数量与规则交给 Jev 定
+
+用户诉求是"玩法有限、纯爽、加机制加道具加地图、让 Jev 决策"。`harness/design_council.js`
+把 8 个问不成的问题一次发给 `jev-1.13.0`，结果写进 `harness/design-plan.json`：
+
+| 问题 | 答案 | 置信 | 落地 |
+|---|---|---|---|
+| 爽点主轴 | `build`（构筑） | 0.63 / 0.71 | 五行命格 + 法宝 + 煞气三选，全部围绕"这局怎么组" |
+| 加几条机制 | 2.04 | 0.27 | 只做 2 条：五行克制、煞气构筑 |
+| 道具条数 | 1.3（=8-10 种） | 0.32 | 10 件法宝（5 主动带充能 / 5 被动改规则），不做第 11 件 |
+| 新地图 | `m0`（0 张） | 0.30 | 一张不加，把渲染和机制密度先做好 |
+| 掉落规则 | `risk_reward` | **1.00** | 见下 |
+| 先修什么 | `wall_noise` | **1.00** | 地图从 `<pre>` 文本流改成 CSS 网格 + 实色墙体 |
+| 可读性风险 | 0.68 | — | 闸门新增 `readability_sync`：新机制不进图例/教程就是缺陷 |
+
+**风险定价是量出来的，不是写出来的。** `harness/check_mechanics.py` 跑 80 次楼层生成，
+统计各品阶落点危险度：凡品 0.91 < 灵品 2.40 < 仙品 4.08。想拿 `❖` 就得穿过精英堆。
+
+**这一轮最值钱的是一条负结果。** 煞气原本"每 6 杀触发"，12 局机器人试玩 **0 次触发**
+（机器人平均一局只杀 1.5 个）——也就是说这个构筑轴对不主动找架打的玩家等于不存在。
+改成单一计数器双来源（每杀 +1、每下一层 +2，满 4 触发）后 12 局 **10 次**。
+第一层的法宝掉落也从纯随机改成保底一件凡品落在安全带，否则"道具驱动玩法"永远停在文档里。
+
+顺带抓到一个自己写的 harness bug：机器人 BFS 用八向，但按键映射只有四向，
+斜格首步被压成水平方向后正好撞墙 → `move()` 早退、回合不推进 → 状态不变 → 同一路径无限空转，
+900 步原地踏步还把 floor 均值稀释成 1.0。BFS 改回四向，并加了"状态 60 步不变即判软锁"的兜底。
 
 ## 已知边界（别当成已验证）
 
@@ -71,10 +99,15 @@
 ## 怎么跑
 
 ```bash
-node --test tests/test_core.js                  # 无网络、无模型，验真实控件
+node --test tests/test_core.js tests/test_gamedata.js   # 无网络、无模型，验真实控件与数据表
 node harness/run_ablation.js --policies=off,local
 JEV_UPSTREAM=stub py -3.12 jev_bridge.py        # 起桥（同进程兼作静态服务器）
 node harness/run_ablation.js --policies=off,local,bridge
 py -3.12 harness/browser_smoke.py               # 真键盘打一局，三模式各验各的
+py -3.12 harness/check_mechanics.py             # 法宝逐件生效 + 煞气三选 + 风险定价分布
+py -3.12 harness/play_batch.py 12               # 机器人试玩，写 harness/balance.json（含触发率）
+py -3.12 harness/shot.py play                   # 桌面 + 390 窄屏截图，附带网格对齐自检
+node harness/design_council.js                  # 让 Jev 定"加多少、按什么规则掉"
+node harness/release_gate.js                    # 18 项确定性否决全绿才问 Jev 判模糊维度
 # 浏览器： http://127.0.0.1:8731/?jev=bridge    按 J 切档
 ```

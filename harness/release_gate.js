@@ -12,22 +12,28 @@ const AS_JSON = argv.includes('--json');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const SIZE_BUDGET_KB = 220;
+const JS_FILES = ['jev/core.js', 'jev/questions.js', 'jev/policies.js', 'jev/client.js', 'jev/gamedata.js'];
 const run = (cmd) => { try { return { ok: true, out: execSync(cmd, { cwd: ROOT, encoding: 'utf8' }) }; } catch (e) { return { ok: false, out: String(e.stdout || '') + String(e.stderr || e.message) }; } };
 const count = (src, re) => (src.match(re) || []).length;
+const round2 = (n) => Math.round(n * 100) / 100;
 
 function loadBalance() { try { return JSON.parse(read('harness/balance.json')); } catch (e) { return null; } }
 
 function deterministicChecks() {
   const html = read('index.html');
-  const jsFiles = ['jev/core.js', 'jev/questions.js', 'jev/policies.js', 'jev/client.js'];
-  const kb = [...jsFiles, 'index.html'].reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0) / 1024;
+  const kb = [...JS_FILES, 'index.html'].reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0) / 1024;
   const tracked = (() => { try { return execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' }); } catch (e) { return ''; } })();
-  const leak = [...html, ...jsFiles.map(read), read('jev_bridge.py')].some((s) => /apikey_[0-9a-f]{16,}|sk-[A-Za-z0-9]{20,}/.test(s));
+  const leak = [...html, ...JS_FILES.map(read), read('jev_bridge.py')].some((s) => /apikey_[0-9a-f]{16,}|sk-[A-Za-z0-9]{20,}/.test(s));
   const ablation = run('node harness/run_ablation.js --policies=off,local');
   const frozenBaseline = ablation.ok && /\| open_direct \| off \| 5 /.test(ablation.out);
   const balance = loadBalance();
+  // 可读性同步：Jev 给 readability_risk 0.68，所以"新机制没进图例/教程"按缺陷处理，不当风格问题
+  const tutSteps = [...html.matchAll(/class="tut-step"[^>]*>([\s\S]*?)<\/div>/g)].map((m) => m[1]).join('\n');
+  const legendBlock = (html.match(/const LEGEND = \[[\s\S]*?\n\s{4}\];/) || [''])[0];
   return [
     { id: 'tests', what: '单元与控件校验（合法域/硬否决/门控/降级/复用）', ok: run('node --test tests/test_core.js').ok },
+    { id: 'gamedata', what: '数据表自洽（五行成圈 / 法宝字段 / 煞气必带代价）', ok: run('node --test tests/test_gamedata.js').ok },
+    { id: 'mechanics', what: '机制回归（法宝逐件生效 · 煞气三选 · 风险定价掉落）', ok: run('py -3.12 harness/check_mechanics.py').ok },
     { id: 'ablation', what: '夹具自检 + 离线消融可跑', ok: ablation.ok },
     { id: 'baseline_frozen', what: '消融基线未被顺手改坏（open_direct 仍第 5 回合）', ok: frozenBaseline },
     { id: 'no_native_dialogs', what: '无 confirm()/alert()（移动端与上架包体要求）', ok: count(html, /\b(confirm|alert)\s*\(/g) === 0 },
@@ -39,6 +45,8 @@ function deterministicChecks() {
     { id: 'env_untracked', what: '.env 未被 git 跟踪', ok: !/^\s*\.env\s*$/m.test(tracked) },
     { id: 'win_lose_paths', what: '有通关与死亡两条终局', ok: /function victory/.test(html) && /function gameOver/.test(html) },
     { id: 'skill_keys', what: '技能有键盘入口（1/2 绑定 castSkill）', ok: /k === '1' \|\| k === '2'/.test(html) },
+    { id: 'relic_keys', what: '法宝有键盘入口（RELIC_KEYS 绑定 useRelic）', ok: /const RELIC_KEYS/.test(html) && /useRelic\(slot\.id\)/.test(html) },
+    { id: 'readability_sync', what: `新机制同步进图例与教程（图例缺 ${['◈', '◆', '❖'].filter((g) => !legendBlock.includes(g)).join('') || '无'}；教程缺 ${['五行', '法宝', '煞气'].filter((w) => !tutSteps.includes(w)).join('') || '无'}）`, ok: ['◈', '◆', '❖'].every((g) => legendBlock.includes(g)) && ['五行', '法宝', '煞气'].every((w) => tutSteps.includes(w)) },
     { id: 'interactions', what: '浏览器交互回归（长老三选 / 购买上报 / 死亡单次结算 / 终局可达）', ok: run('py -3.12 harness/check_interactions.py').ok },
     { id: 'input_responsive', what: balance ? `判断层不阻塞输入（按键被吞率 ${balance.input_blocked_pct}%）` : '判断层不阻塞输入（缺 balance.json）', ok: !!balance && typeof balance.input_blocked_pct === 'number' && balance.input_blocked_pct < 1 },
     { id: 'death_attributed', what: balance ? `死亡原因 100% 可归因（机器人 ${balance.games} 局，${balance.deaths} 死 / ${balance.unattributed_deaths} 不明）` : '死亡原因可归因（缺 balance.json，先跑 play_batch）', ok: !!balance && balance.unattributed_deaths === 0 && balance.games >= 5 && balance.deaths >= 1 },
@@ -64,13 +72,14 @@ function buildEvidence(checks, kb, balance) {
     onboarding_copy: (html.match(/目标：[\s\S]*?<\/p>/) || ['—'])[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
     controls: (html.match(/class="controls">([\s\S]*?)<\/div>/) || ['—', '—'])[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
     hud_fields: [...html.matchAll(/class="stat-label">([^<]+)</g)].map((m) => m[1]),
-    difficulty_formula: '每层敌人 气血 +floor*5、攻击 +floor*2；第 2 层起 20% 概率出精英；第 10 层固定旱魃 + 小怪',
+    difficulty_formula: '每层敌人 气血 +floor*5、攻击 +floor*2；第 2 层起 20% 概率出精英；第 10 层固定旱魃 + 小怪；持聚宝盆则每层 +2 只',
     ai_skill_timing: 'off = 旧随机；local/norule = 确定性规则（够得着喷火、够不着召唤、未被诅咒立刻下咒）；auto/bridge = 交 Jev 判',
-    mechanics: ['10 层地牢 + 随机房间路网', '3 职业各 2 主动技能（灵气资源）', '3 精英：诅咒/分裂/反甲', 'BOSS 旱魃：喷火/召唤，半血触发', '太乙祭坛解咒 · 陷阱可见 · 钥匙开宝箱', '每层一次商店（攻/防/药三选）', '长老三选机缘（传功/疗伤/考验）', '永久死亡，无存档'],
+    mechanics: ['10 层地牢 + 随机房间路网', '3 职业各 2 主动技能（灵气资源）', '五行命格：金→木→土→水→火→金，克 +30% / 被克 -25%，描边即属性', '10 件法宝（5 主动带充能 / 5 被动改规则），按风险定价掉落：实测凡品落点危险度 0.9、灵品 2.3、仙品 4.4', '煞气构筑：每 6 杀强制三选一，8 种异变每项都同时给好处和代价并改写命格', '3 精英：诅咒/分裂/反甲', 'BOSS 旱魃：喷火/召唤，半血触发', '太乙祭坛解咒 · 陷阱可见 · 钥匙开宝箱', '每层一次商店（攻/防/药三选）', '长老三选机缘（传功/疗伤/考验）', '永久死亡，无存档'],
     ai_ablation: { note: '7 条手搭夹具，同路网同接战半径，只比决策质量', old_greedy_never_reaches_player: 3, judgment_layer_reaches: 5, self_kill_old_vs_new: '5 → 0', real_model_vs_local_outcome: '7/7 条贴脸回合数完全相同', cost_of_asking_model: '单条夹具最多 118 次调用 / 85266 输入 token，换到同一个结果' },
     bot_playthroughs: balance ? { games: balance.games, policy: balance.policy, deaths: balance.deaths, death_causes: balance.death_causes, wins: balance.wins, softlocks: balance.softlocks, floor_avg: balance.floor_reached_avg, floor_max: balance.floor_reached_max, input_blocked_pct: balance.input_blocked_pct, deaths_on_floor_1: balance.died_on_floor_1 } : null,
     victory_branch: victory ? '已单独验证：击败旱魃后渡劫弹窗出现' : '未验证',
-    known_gaps: ['无音效（第一性原理重构时按"不产生决策"砍掉）', '无存档（永久死亡是核心机制，故意不做）', '试玩证据来自 BFS 冲楼梯机器人（不会撤退、不会规划购物），0/18 通关、最高第 4 层，说明早期致死性偏高，但这是机器人下限而非人类手感', '判断层在真模型下与本地启发式 7/7 结果相同，模型在寻路上的增益未证实', '无真人试玩样本，无留存数据'],
+    content_reachability: balance ? { sha_drafts_per_run: round2(balance.sha_drafts_seen / Math.max(1, balance.games)), relics_picked_per_run: round2((balance.relics_avg || 0)), kills_per_run: round2(balance.kills_avg || 0), floor_avg: balance.floor_reached_avg, floor_max: balance.floor_reached_max } : null,
+    known_gaps: ['无音效（第一性原理重构时按"不产生决策"砍掉）', '无存档（永久死亡是核心机制，故意不做）', '试玩证据来自 BFS 冲楼梯机器人（不会撤退、不会规划购物、不主动找架打），0 通关，说明早期致死性偏高，但这是机器人下限而非人类手感', '机器人不主动绕路捡法宝，relics/run 是下限；真人是否走风险路线只能等线上遥测', '判断层在真模型下与本地启发式 7/7 结果相同，模型在寻路上的增益未证实', '无真人试玩样本，无留存数据'],
   };
 }
 
@@ -85,7 +94,7 @@ async function askJev(evidence) {
 
 (async function main() {
   const checks = deterministicChecks();
-  const kb = ['index.html', 'jev/core.js', 'jev/questions.js', 'jev/policies.js', 'jev/client.js'].reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0) / 1024;
+  const kb = ['index.html', ...JS_FILES].reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0) / 1024;
   const allPass = checks.every((c) => c.ok);
   const evidence = buildEvidence(checks, kb, loadBalance());
   let verdict = { status: 'HOLD', reasons: [] };

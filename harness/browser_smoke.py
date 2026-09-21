@@ -26,15 +26,34 @@ PROBE = """() => {
   if (!cand.length) return { done: false, stuck: true, dx: 0, dy: 0, hp: player.hp, floor, chip: document.getElementById('jev-chip').innerText, stats: { ...jev.stats }, adjacent: false };
   const best = cand.sort((a, b) => (Math.abs(near.x - a.nx) + Math.abs(near.y - a.ny)) - (Math.abs(near.x - b.nx) + Math.abs(near.y - b.ny)))[0];
   return { done: false, dx: best.dx, dy: best.dy, hp: player.hp, floor,
+           blocked: (typeof tutOpen !== 'undefined' && tutOpen) || (typeof draftPending !== 'undefined' && draftPending) || (typeof elderPending !== 'undefined' && elderPending),
            chip: document.getElementById('jev-chip').innerText, stats: { ...jev.stats },
            adjacent: alive.some(e => Math.abs(e.x - player.x) + Math.abs(e.y - player.y) === 1) };
 }"""
+
+
+DISMISS = """() => {
+  const open = (id) => !document.getElementById(id).classList.contains('hidden');
+  if (open('tut-modal')) { closeTutorial(); return 'tutorial'; }
+  if (open('draft-modal')) { document.querySelector('#draft-items .shop-item').click(); return 'draft'; }
+  if (open('elder-modal')) { document.querySelector('#elder-items .shop-item').click(); return 'elder'; }
+  return null;
+}"""
+
+
+def dismiss(page) -> None:
+    """教程 / 煞气三选 / 长老都会吃掉按键：真人会点掉，机器人也得点，否则测的是弹窗不是战斗。"""
+    for _ in range(6):
+        if not page.evaluate(DISMISS):
+            return
+        page.wait_for_timeout(60)
 
 
 def run_mode(page, mode: str) -> dict:
     page.goto(f"{BASE}/?jev={mode}", wait_until="load")
     page.get_by_role("heading", name="⚔️ 武痴").click()
     page.wait_for_timeout(150)
+    dismiss(page)
     hurt = False
     adjacent_seen = False
     last_hp = page.evaluate(PROBE)["hp"]
@@ -43,6 +62,9 @@ def run_mode(page, mode: str) -> dict:
         st = page.evaluate(PROBE)
         if st.get("done"):
             break
+        if st.get("blocked"):
+            dismiss(page)
+            continue
         if st["hp"] < last_hp:
             hurt = True
         last_hp = st["hp"]
@@ -69,10 +91,14 @@ def main() -> int:
             results.append(run_mode(page, mode))
         page.goto(f"{BASE}/?jev=local", wait_until="load")
         page.get_by_role("heading", name="⚔️ 武痴").click()
+        dismiss(page)
         for _ in range(18):
             st = page.evaluate(PROBE)
             if st.get("done"):
                 break
+            if st.get("blocked"):
+                dismiss(page)
+                continue
             page.keyboard.press(KEYS["right"] if st["dx"] > 0 else KEYS["left"] if st["dx"] < 0 else KEYS["down"] if st["dy"] > 0 else KEYS["up"])
             page.wait_for_timeout(30)
         page.screenshot(path=str(OUT / "play.png"))
