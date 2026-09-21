@@ -76,6 +76,11 @@
     .hint { color: var(--ink-dim); font-size: 13px; }
     .shop-msg { min-height: 22px; font-size: 14px; margin: 6px 0 10px; }
     .shop-msg.ok { color: var(--green); } .shop-msg.warn-big { color: #ff8fa3; font-weight: 700; }
+    .fb-status { min-height: 22px; font-size: 14px; margin: 8px 0 0; text-align: center; max-width: 560px; }
+    .fb-status.ok { color: var(--green); font-weight: 700; }
+    .fb-status.warn { color: #ffcf8a; font-weight: 700; }
+    .fb-raw { width: 90%; max-width: 560px; height: 110px; margin-top: 8px; background: var(--deep); color: var(--ink);
+      border: 1px solid var(--line); padding: 8px; font-family: var(--map); font-size: 11px; }
     .skill-btn { display: block; width: 100%; margin-bottom: 6px; padding: 10px; font-family: inherit; font-size: 14px;
       text-align: left; background: #232a44; border: 1px solid var(--line); color: var(--ink); min-height: 44px; cursor: pointer; }
     .skill-btn:hover { background: #2e3757; }
@@ -186,6 +191,8 @@
     <h2>☯ 反馈与诊断</h2>
     <p id="fb-diag" style="color:#7dd3fc; text-align:left; background:#12121f; padding:8px; margin-bottom:8px; max-height:150px; overflow:auto;"></p>
     <textarea id="fb-text" placeholder="遇到什么了？卡关、看不懂、报错、手感不对都行" style="width:90%; height:64px; background:#12121f; color:#e2e8f0; border:1px solid #333; padding:8px; font-family:inherit; "></textarea>
+    <p id="fb-status" class="fb-status"></p>
+    <textarea id="fb-raw" class="fb-raw hidden" readonly></textarea>
     <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:10px;">
       <button onclick="fbCopy()">复制诊断</button>
       <button onclick="fbDownload()">下载 .json</button>
@@ -283,14 +290,43 @@
       const d = insight.diag();
       document.getElementById('fb-diag').innerText = `回合延迟 p50 ${d.turn_ms ? d.turn_ms.p50 : '?'}ms / p95 ${d.turn_ms ? d.turn_ms.p95 : '?'}ms · 事件 ${d.events} 条 · 报错 ${d.errors.length} · 判断层 ${d.env.mode} · 时区 ${d.env.tz} · 存储 ${d.storage ? 'OK' : '不可用'}` + (d.errors.length ? ' ｜ ' + d.errors.map(e => e.msg).join(' ｜ ') : '');
       document.getElementById('fb-opt').checked = insight.state.enabled;
+      document.getElementById('fb-status').className = 'fb-status';
+      document.getElementById('fb-raw').classList.add('hidden');
+      document.getElementById('fb-text').value = '';
       document.getElementById('fb-modal').classList.remove('hidden');
     }
     function closeFeedback() { document.getElementById('fb-modal').classList.add('hidden'); }
     function fbToggle(on) { insight.setEnabled(on); }
     function fbPayload() { return JSON.stringify(insight.bundle(document.getElementById('fb-text').value), null, 1); }
-    function fbCopy() { const t = fbPayload(); insight.feedback(document.getElementById('fb-text').value); navigator.clipboard && navigator.clipboard.writeText(t).then(() => log('◈ 诊断已复制，贴到反馈帖即可', 'log-item')); }
-    function fbDownload() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([fbPayload()], { type: 'application/json' })); a.download = 'yinyang-diag-' + Date.now() + '.json'; a.click(); insight.feedback(document.getElementById('fb-text').value); }
-    function fbUpload() { if (!insight.cfg.endpoint) { log('◈ 未配置收集端，请用复制或下载', 'log-curse'); return; } insight.feedback(document.getElementById('fb-text').value); insight.upload().then((n) => log(n ? `◈ 已上传 ${n} 份诊断` : '◈ 上传失败，数据留在本机下次再试', n ? 'log-win' : 'log-curse')); }
+    function fbStatus(text, kind) { const el = document.getElementById('fb-status'); el.innerText = text; el.className = 'fb-status ' + (kind || ''); }
+    function fbCopy() {
+      const t = fbPayload(); insight.feedback(document.getElementById('fb-text').value);
+      const raw = document.getElementById('fb-raw'); raw.value = t;
+      const manual = (why) => {
+        raw.classList.remove('hidden'); raw.focus(); raw.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        fbStatus(why + '：内容已全选，按 Ctrl+C 即可复制', 'warn');
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(
+          () => fbStatus(`✅ 已复制 ${t.length} 字符 —— 直接粘贴给开发者，或贴到反馈帖`, 'ok'),
+          () => manual('浏览器拒绝了剪贴板写入'));
+      } else manual('这个浏览器没有剪贴板接口');
+    }
+    function fbDownload() {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const name = `yinyang-diag-${stamp}.json`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([fbPayload()], { type: 'application/json' }));
+      a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      insight.feedback(document.getElementById('fb-text').value);
+      fbStatus(`✅ 已下载 ${name}（在浏览器"下载"文件夹里），把这个文件发给开发者即可`, 'ok');
+    }
+    function fbUpload() {
+      if (!insight.cfg.endpoint) { fbStatus('这个版本没配自动收集端，请用「复制诊断」或「下载 .json」', 'warn'); return; }
+      insight.feedback(document.getElementById('fb-text').value);
+      insight.upload().then((n) => fbStatus(n ? `✅ 已上传 ${n} 份诊断` : '⚠ 上传失败，数据留在本机，下次自动重试', n ? 'ok' : 'warn'));
+    }
     function showClassSelect() { document.getElementById('game-over').classList.add('hidden'); const vm = document.getElementById('victory-modal'); if (vm) vm.remove(); document.getElementById('class-select').classList.remove('hidden'); }
     function initGame() {
       jev.reset();
