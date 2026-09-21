@@ -11,3 +11,4 @@ harness/balance.json
 dist/
 yinyang-itch.zip
 .smoke-mobile-*.png
+dist-single/
