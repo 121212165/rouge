@@ -182,7 +182,7 @@
   </div>
   <div id="shop-modal" class="modal hidden">
     <h2>🛒 灵气商店</h2>
-    <p><span id="shop-gold" class="shop-gold"></span>　<span class="hint">每层只能逛一次，点"离开商店"就下楼梯、回不来这层</span></p>
+    <p><span id="shop-gold" class="shop-gold"></span>　<span class="hint">每层只能买 1 件（攻 / 防 / 血 三选一）；点"离开商店"就下楼梯、回不来这层</span></p>
     <p id="shop-msg" class="shop-msg"></p>
     <div id="shop-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
     <button onclick="closeShop()" style="margin-top:20px;">离开商店</button>
@@ -238,7 +238,7 @@
       { id: 'potion', name: '生命药水', price: 20, effect: { type: 'heal', value: 30 }, desc: 'HP +30' }
     ];
     let player, map, enemies, items, floor, logs, playerClass, curse, shopAllowed;
-    let busy = false, mapVersion = 0, deathBy = null;
+    let busy = false, mapVersion = 0, deathBy = null, dead = false, shopSpent = false;
     const insight = Insight.make({ endpoint: new URLSearchParams(location.search).get('tlUrl') || null });
     const QS = new URLSearchParams(location.search);
     const jev = JEVClient.makeClient({ mode: QS.get('jev') || 'local', endpoint: QS.get('jevUrl') || '/decide', stakeDelta: +(QS.get('stake') || 2) });
@@ -333,7 +333,7 @@
       const base = { '医师': { hp: 120, maxHp: 120, atk: 10, def: 2 }, '炼药师': { hp: 90, maxHp: 90, atk: 13, def: 0 }, '武痴': { hp: 110, maxHp: 110, atk: 15, def: -1 } };
       const s = base[playerClass];
       player = { x: 1, y: 1, hp: s.hp, maxHp: s.maxHp, atk: s.atk, def: s.def, gold: 0, exp: 0, level: 0, expTo: 100, class: playerClass, weapon: 'fist', energy: 100, maxEnergy: 100, kills: 0, confused: false, tempBuffs: [], poison: 0, hasKey: false, cursed: false };
-      floor = 1; curse = null; shopAllowed = true; deathBy = null; enemies = []; items = []; logs = [];
+      floor = 1; curse = null; shopAllowed = true; deathBy = null; dead = false; shopSpent = false; enemies = []; items = []; logs = [];
       document.getElementById('game-over').classList.add('hidden');
       generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld(); insight.startRun(playerClass); insight.ev('floor_enter', { floor, foes: enemies.length });
       log('☯ 欢迎来到阴阳道！击败旱魃，渡劫飞升！', 'log-item');
@@ -403,6 +403,7 @@
       document.getElementById('game').innerHTML = output;
     }
     async function move(dx, dy) {
+      if (dead || busy || elderPending || tutOpen) { insight.ev('key_after_death', {}); return; }
       if (busy || elderPending || tutOpen) { insight.ev('key_dropped', { why: busy ? 'busy' : (elderPending ? 'elder' : 'tutorial') }); return; }
       insight.markTurnStart();
       const nx = player.x + dx, ny = player.y + dy;
@@ -505,17 +506,17 @@
       updateUI();
     }
     function nearest() { let n = null, min = Infinity; enemies.forEach(e => { const d = Math.abs(player.x - e.x) + Math.abs(player.y - e.y); if (d < min) { min = d; n = e; } }); return n; }
-    function nextFloor() { if (floor >= FINAL_FLOOR) { log('✦ 击败旱魃才能渡劫！', 'log-curse'); return; } shopAllowed = true; openShop(); }
+    function nextFloor() { if (floor >= FINAL_FLOOR) { log('✦ 击败旱魃才能渡劫！', 'log-curse'); return; } if (!document.getElementById('shop-modal').classList.contains('hidden')) return; shopAllowed = true; shopSpent = false; openShop(); }
     function renderShop() {
       const c = document.getElementById('shop-items'); c.innerHTML = '';
       SHOP_ITEMS.forEach((item) => {
-        const afford = player.gold >= item.price;
+        const afford = player.gold >= item.price && !shopSpent;
         const full = item.effect.type === 'heal' && player.hp >= player.maxHp;
         const div = document.createElement('div');
         div.className = 'shop-item' + (afford ? '' : ' poor');
         div.onclick = () => buyItem(item);
         div.innerHTML = `<h3>${item.name}</h3><p>${item.desc}</p><p class="price">${item.price} 灵气</p>`
-          + (afford ? (full ? '<p class="warn">气血已满，买了浪费</p>' : '') : `<p class="warn">还差 ${item.price - player.gold}</p>`);
+          + (shopSpent ? '<p class="warn">本层机会已用掉</p>' : !afford ? `<p class="warn">还差 ${item.price - player.gold}</p>` : full ? '<p class="warn">气血已满，买了浪费</p>' : '');
         c.appendChild(div);
       });
       document.getElementById('shop-gold').innerText = `持有灵气 ${player.gold}`;
@@ -528,16 +529,17 @@
     }
     function closeShop() { document.getElementById('shop-modal').classList.add('hidden'); shopAllowed = false; nextFloorAfterShop(); }
     function buyItem(item) {
+      if (shopSpent) { shopMsg('本层已经买过了 —— 攻 / 防 / 血 只能选一个', 'warn-big'); return; }
       if (player.gold < item.price) {
         // 失败必须写在弹窗里：日志面板在遮罩后面，玩家看不见，点了就像没反应
         shopMsg(`灵气不足，${item.name}要 ${item.price}，你还差 ${item.price - player.gold}`, 'warn-big');
         log('灵气不足！', 'log-curse'); return;
       }
-      player.gold -= item.price;
+      player.gold -= item.price; shopSpent = true;
       if (item.effect.type === 'atk') { player.atk += item.effect.value; shopMsg(`已买${item.name}：攻击 +${item.effect.value}`, 'ok'); log(`购买${item.name}，攻击+${item.effect.value}`, 'log-item'); }
       else if (item.effect.type === 'def') { player.def += item.effect.value; shopMsg(`已买${item.name}：防御 +${item.effect.value}`, 'ok'); log(`购买${item.name}，防御+${item.effect.value}`, 'log-item'); }
       else if (item.effect.type === 'heal') { const before = player.hp; player.hp = Math.min(player.maxHp, player.hp + item.effect.value); const got = player.hp - before; shopMsg(got ? `已买${item.name}：气血 +${got}` : `已买${item.name}，但气血已满，白花了 ${item.price}`, got ? 'ok' : 'warn-big'); log(`购买${item.name}，恢复${got}气血`, 'log-heal'); }
-      insight.ev('shop_buy', { item: item.name, price: item.price, gold: player.gold });
+      insight.ev('shop_buy', { item: item.name, price: item.price, gold: player.gold, floor });
       renderShop(); updateUI();
     }
     function nextFloorAfterShop() {
@@ -578,9 +580,9 @@
       else if (k === 'heal') { player.hp = Math.min(player.maxHp, player.hp + 50); log('◈ 老人施展神通，恢复50气血！', 'log-heal'); }
       else if (Math.random() < 0.3) { curse = '道心不稳'; player.expTo = Math.floor(player.expTo * 1.5); log('◈ 考验失败！诅咒：道心不稳', 'log-curse'); }
       else { player.gold += 50; log('◈ 考验通过！获得50灵气！', 'log-item'); }
-      insight.ev('shop_buy', { item: item.name, price: item.price, gold: player.gold }); updateUI();
+      updateUI();
     }
-    function gameOver() { insight.ev('death', { cause: deathBy || '不明', floor, level: player.level, kills: player.kills, gold: player.gold, cls: player.class, jev: jev.summary() }); const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; document.getElementById('go-msg').innerText = `死于 ${deathBy || '不明'} ｜ 第${floor}层 ${realm} ｜ 灵气${player.gold}`; document.getElementById('game-over').classList.remove('hidden'); log('✦ 身死道消...', 'log-death'); }
+    function gameOver() { if (dead) return; dead = true; insight.ev('death', { cause: deathBy || '不明', floor, level: player.level, kills: player.kills, gold: player.gold, cls: player.class, jev: jev.summary() }); const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; document.getElementById('go-msg').innerText = `死于 ${deathBy || '不明'} ｜ 第${floor}层 ${realm} ｜ 灵气${player.gold}`; document.getElementById('game-over').classList.remove('hidden'); log('✦ 身死道消...', 'log-death'); }
     function victory() { insight.ev('victory', { floor, level: player.level, kills: player.kills, gold: player.gold });
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; log(`✦ 渡劫成功！${realm}位列仙班！`, 'log-win');
       const div = document.createElement('div'); div.className = 'modal'; div.id = 'victory-modal';

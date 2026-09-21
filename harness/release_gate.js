@@ -39,7 +39,7 @@ function deterministicChecks() {
     { id: 'env_untracked', what: '.env 未被 git 跟踪', ok: !/^\s*\.env\s*$/m.test(tracked) },
     { id: 'win_lose_paths', what: '有通关与死亡两条终局', ok: /function victory/.test(html) && /function gameOver/.test(html) },
     { id: 'skill_keys', what: '技能有键盘入口（1/2 绑定 castSkill）', ok: /k === '1' \|\| k === '2'/.test(html) },
-    { id: 'victory_path', what: '终局分支可达（真代码路径打出渡劫弹窗）', ok: run('py -3.12 harness/check_victory.py').ok },
+    { id: 'interactions', what: '浏览器交互回归（长老三选 / 购买上报 / 死亡单次结算 / 终局可达）', ok: run('py -3.12 harness/check_interactions.py').ok },
     { id: 'input_responsive', what: balance ? `判断层不阻塞输入（按键被吞率 ${balance.input_blocked_pct}%）` : '判断层不阻塞输入（缺 balance.json）', ok: !!balance && typeof balance.input_blocked_pct === 'number' && balance.input_blocked_pct < 1 },
     { id: 'death_attributed', what: balance ? `死亡原因 100% 可归因（机器人 ${balance.games} 局，${balance.deaths} 死 / ${balance.unattributed_deaths} 不明）` : '死亡原因可归因（缺 balance.json，先跑 play_batch）', ok: !!balance && balance.unattributed_deaths === 0 && balance.games >= 5 && balance.deaths >= 1 },
   ];
