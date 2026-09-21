@@ -70,6 +70,12 @@
     .shop-item h3 { font-size: 15px; color: var(--green); margin-bottom: 6px; }
     .shop-item p { font-size: 13px; color: var(--ink-dim); margin: 3px 0; }
     .shop-item .price { color: var(--gold); font-weight: 700; }
+    .shop-item.poor { opacity: 0.5; border-color: #2c3554; }
+    .shop-item .warn { color: #ff8fa3; font-size: 12px; margin-top: 4px; }
+    .shop-gold { color: var(--gold); font-weight: 700; font-size: 16px; }
+    .hint { color: var(--ink-dim); font-size: 13px; }
+    .shop-msg { min-height: 22px; font-size: 14px; margin: 6px 0 10px; }
+    .shop-msg.ok { color: var(--green); } .shop-msg.warn-big { color: #ff8fa3; font-weight: 700; }
     .skill-btn { display: block; width: 100%; margin-bottom: 6px; padding: 10px; font-family: inherit; font-size: 14px;
       text-align: left; background: #232a44; border: 1px solid var(--line); color: var(--ink); min-height: 44px; cursor: pointer; }
     .skill-btn:hover { background: #2e3757; }
@@ -157,7 +163,7 @@
   </div>
   <div id="class-select" class="modal">
     <h2>✦ 选择修炼方向 ✦</h2>
-    <p style="font-size:0.55rem; color:#7dd3fc; margin-bottom:10px;">目标：下到第 10 层击败旱魃，渡劫飞升。<br>风险：陷阱可见可避 · 精英会下诅咒 · 每层只有 1 次商店 · 身死即重开</p>
+    <p style="color:#7dd3fc; margin-bottom:10px;">目标：下到第 10 层击败旱魃，渡劫飞升。<br>风险：陷阱可见可避 · 精英会下诅咒 · 每层只有 1 次商店 · 身死即重开</p>
     <div class="class-options">
       <div class="class-card" onclick="selectClass('医师')"><h3>🧑‍⚕️ 医师</h3><div class="desc">HP+20 防御+2</div><div class="skill">针灸暴击+30%</div></div>
       <div class="class-card" onclick="selectClass('炼药师')"><h3>⚗️ 炼药师</h3><div class="desc">攻击+3 HP-10</div><div class="skill">每层回复15HP</div></div>
@@ -166,31 +172,32 @@
   </div>
   <div id="game-over" class="game-over hidden">
     <h2>💀 身死道消 💀</h2>
-    <p id="go-msg" style="color:#666;margin-bottom:15px;font-size:0.5rem"></p>
+    <p id="go-msg" class="hint"></p>
     <button onclick="showClassSelect()">↻ 轮回重修</button>
   </div>
   <div id="shop-modal" class="modal hidden">
     <h2>🛒 灵气商店</h2>
-    <p style="font-size:0.5rem; margin-bottom:10px;">每层只能购买 1 次</p>
+    <p><span id="shop-gold" class="shop-gold"></span>　<span class="hint">每层只能逛一次，点"离开商店"就下楼梯、回不来这层</span></p>
+    <p id="shop-msg" class="shop-msg"></p>
     <div id="shop-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
     <button onclick="closeShop()" style="margin-top:20px;">离开商店</button>
   </div>
   <div id="fb-modal" class="modal hidden">
     <h2>☯ 反馈与诊断</h2>
-    <p id="fb-diag" style="font-size:0.5rem; color:#7dd3fc; text-align:left; background:#12121f; padding:8px; margin-bottom:8px; max-height:150px; overflow:auto;"></p>
-    <textarea id="fb-text" placeholder="遇到什么了？卡关、看不懂、报错、手感不对都行" style="width:90%; height:64px; background:#12121f; color:#e2e8f0; border:1px solid #333; padding:8px; font-family:inherit; font-size:0.6rem;"></textarea>
+    <p id="fb-diag" style="color:#7dd3fc; text-align:left; background:#12121f; padding:8px; margin-bottom:8px; max-height:150px; overflow:auto;"></p>
+    <textarea id="fb-text" placeholder="遇到什么了？卡关、看不懂、报错、手感不对都行" style="width:90%; height:64px; background:#12121f; color:#e2e8f0; border:1px solid #333; padding:8px; font-family:inherit; "></textarea>
     <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:10px;">
       <button onclick="fbCopy()">复制诊断</button>
       <button onclick="fbDownload()">下载 .json</button>
       <button onclick="fbUpload()">上传</button>
       <button onclick="closeFeedback()">关闭</button>
     </div>
-    <label style="display:block; font-size:0.5rem; margin-top:10px; color:#94a3b8;"><input type="checkbox" id="fb-opt" checked onchange="fbToggle(this.checked)"> 记录本局行为数据（只存本机，含回合延迟与报错）</label>
-    <button onclick="insight.clear(); log('◈ 已清空本机诊断数据', 'log-item')" style="margin-top:6px; font-size:0.5rem;">清空数据</button>
+    <label style="display:block; margin-top:10px; color:#94a3b8;"><input type="checkbox" id="fb-opt" checked onchange="fbToggle(this.checked)"> 记录本局行为数据（只存本机，含回合延迟与报错）</label>
+    <button onclick="insight.clear(); log('◈ 已清空本机诊断数据', 'log-item')" style="margin-top:6px; ">清空数据</button>
   </div>
   <div id="elder-modal" class="modal hidden">
     <h2>☯ 太乙长老</h2>
-    <p id="elder-ask" style="font-size:0.5rem; margin-bottom:10px;"></p>
+    <p id="elder-ask" style="margin-bottom:10px;"></p>
     <div id="elder-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
   </div>
   <script src="insight.js"></script>
@@ -463,19 +470,39 @@
     }
     function nearest() { let n = null, min = Infinity; enemies.forEach(e => { const d = Math.abs(player.x - e.x) + Math.abs(player.y - e.y); if (d < min) { min = d; n = e; } }); return n; }
     function nextFloor() { if (floor >= FINAL_FLOOR) { log('✦ 击败旱魃才能渡劫！', 'log-curse'); return; } shopAllowed = true; openShop(); }
+    function renderShop() {
+      const c = document.getElementById('shop-items'); c.innerHTML = '';
+      SHOP_ITEMS.forEach((item) => {
+        const afford = player.gold >= item.price;
+        const full = item.effect.type === 'heal' && player.hp >= player.maxHp;
+        const div = document.createElement('div');
+        div.className = 'shop-item' + (afford ? '' : ' poor');
+        div.onclick = () => buyItem(item);
+        div.innerHTML = `<h3>${item.name}</h3><p>${item.desc}</p><p class="price">${item.price} 灵气</p>`
+          + (afford ? (full ? '<p class="warn">气血已满，买了浪费</p>' : '') : `<p class="warn">还差 ${item.price - player.gold}</p>`);
+        c.appendChild(div);
+      });
+      document.getElementById('shop-gold').innerText = `持有灵气 ${player.gold}`;
+    }
+    function shopMsg(text, kind) { const el = document.getElementById('shop-msg'); el.innerText = text; el.className = kind || ''; }
     function openShop() { insight.ev('shop_open', { floor, gold: player.gold });
       if (!shopAllowed) { nextFloorAfterShop(); return; }
+      shopMsg(''); renderShop();
       document.getElementById('shop-modal').classList.remove('hidden');
-      const c = document.getElementById('shop-items'); c.innerHTML = '';
-      SHOP_ITEMS.forEach(item => { const div = document.createElement('div'); div.className = 'shop-item'; div.onclick = () => buyItem(item); div.innerHTML = `<h3>${item.name}</h3><p>${item.desc}</p><p class="price">${item.price} 灵气</p>`; c.appendChild(div); });
     }
     function closeShop() { document.getElementById('shop-modal').classList.add('hidden'); shopAllowed = false; nextFloorAfterShop(); }
     function buyItem(item) {
-      if (player.gold < item.price) { log('灵气不足！', 'log-curse'); return; } player.gold -= item.price;
-      if (item.effect.type === 'atk') { player.atk += item.effect.value; log(`购买${item.name}，攻击+${item.effect.value}`, 'log-item'); }
-      else if (item.effect.type === 'def') { player.def += item.effect.value; log(`购买${item.name}，防御+${item.effect.value}`, 'log-item'); }
-      else if (item.effect.type === 'heal') { player.hp = Math.min(player.maxHp, player.hp + item.effect.value); log(`购买${item.name}，恢复${item.effect.value}气血`, 'log-heal'); }
-      updateUI();
+      if (player.gold < item.price) {
+        // 失败必须写在弹窗里：日志面板在遮罩后面，玩家看不见，点了就像没反应
+        shopMsg(`灵气不足，${item.name}要 ${item.price}，你还差 ${item.price - player.gold}`, 'warn-big');
+        log('灵气不足！', 'log-curse'); return;
+      }
+      player.gold -= item.price;
+      if (item.effect.type === 'atk') { player.atk += item.effect.value; shopMsg(`已买${item.name}：攻击 +${item.effect.value}`, 'ok'); log(`购买${item.name}，攻击+${item.effect.value}`, 'log-item'); }
+      else if (item.effect.type === 'def') { player.def += item.effect.value; shopMsg(`已买${item.name}：防御 +${item.effect.value}`, 'ok'); log(`购买${item.name}，防御+${item.effect.value}`, 'log-item'); }
+      else if (item.effect.type === 'heal') { const before = player.hp; player.hp = Math.min(player.maxHp, player.hp + item.effect.value); const got = player.hp - before; shopMsg(got ? `已买${item.name}：气血 +${got}` : `已买${item.name}，但气血已满，白花了 ${item.price}`, got ? 'ok' : 'warn-big'); log(`购买${item.name}，恢复${got}气血`, 'log-heal'); }
+      insight.ev('shop_buy', { item: item.name, price: item.price, gold: player.gold });
+      renderShop(); updateUI();
     }
     function nextFloorAfterShop() {
       player.tempBuffs = []; player.confused = false; player.energy = Math.min(player.maxEnergy, player.energy + 20); floor++;
@@ -521,7 +548,7 @@
     function victory() { insight.ev('victory', { floor, level: player.level, kills: player.kills, gold: player.gold });
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; log(`✦ 渡劫成功！${realm}位列仙班！`, 'log-win');
       const div = document.createElement('div'); div.className = 'modal'; div.id = 'victory-modal';
-      div.innerHTML = `<h2 style="color:#ffd700; font-size:1.2rem;">✦ 渡劫飞升 ✦</h2><p style="color:#7dd3fc; font-size:0.6rem; margin-bottom:10px;">恭喜渡过天劫，位列仙班！</p><div style="background:#1a1a2e; padding:15px; margin:10px 0; border:2px solid #4a4a6a;"><p style="color:#fff; font-size:0.5rem;">境界：${realm}</p><p style="color:#fff; font-size:0.5rem;">层数：第${floor}层</p><p style="color:#ffd700; font-size:0.5rem;">灵气：${player.gold}</p></div><button onclick="this.parentElement.remove();showClassSelect();">↻ 重新开始</button>`;
+      div.innerHTML = `<h2 style="color:#ffd700; font-size:22px;">✦ 渡劫飞升 ✦</h2><p style="color:#7dd3fc; margin-bottom:10px;">恭喜渡过天劫，位列仙班！</p><div style="background:#1a1a2e; padding:15px; margin:10px 0; border:2px solid #4a4a6a;"><p style="color:#fff; ">境界：${realm}</p><p style="color:#fff; ">层数：第${floor}层</p><p style="color:#ffd700; ">灵气：${player.gold}</p></div><button onclick="this.parentElement.remove();showClassSelect();">↻ 重新开始</button>`;
       document.body.appendChild(div);
     }
     function log(msg, cls = '') { logs.unshift({ msg, cls }); if (logs.length > 30) logs.pop(); document.getElementById('log').innerHTML = logs.map(l => `<div class="log-entry ${l.cls}">${l.msg}</div>`).join(''); }
