@@ -13,6 +13,7 @@ const flag = (name, dflt) => { const a = argv.find((s) => s.startsWith('--' + na
 const POLICIES = flag('policies', 'off,local,bridge').split(',').filter(Boolean);
 const ONLY = flag('only', '').split(',').filter(Boolean);
 const AS_JSON = argv.includes('--json');
+const STAKE = +(flag('stake', '2'));
 const ENDPOINT = process.env.JEV_ENDPOINT || 'http://127.0.0.1:8731/decide';
 
 // 夹具自检：行等长、单位与玩家落在地面、八邻域可达（引擎允许斜走与切角）
@@ -57,7 +58,7 @@ function movePlayer(model, w, tick) {
 async function runOne(sc, mode) {
   const w = validate(sc).world;
   w.engageRadius = sc.radius;
-  const client = Client.makeClient({ mode, endpoint: ENDPOINT, timeoutMs: +(process.env.JEV_TIMEOUT || 8000) });
+  const client = Client.makeClient({ mode, endpoint: ENDPOINT, stakeDelta: STAKE, timeoutMs: +(process.env.JEV_TIMEOUT || 8000) });
   const m = { contactTick: null, minDist: null, stuckTicks: 0, adjacentTicks: 0, strikes: 0, suicides: 0, illegal: 0 };
   for (let tick = 1; tick <= sc.maxTicks; tick++) {
     movePlayer(sc.model, w, tick);

@@ -27,5 +27,47 @@
     return { unit: u.id, state, questions, heads: Object.keys(questions) };
   }
 
-  return { build, needsJudgment };
+  // 无规则决策的问题包：这些地方代码本来就没有更好的规则，正是该花钱问 Jev 的地方
+  function elderPacket(w) {
+    const p = w.player;
+    return {
+      state: {
+        scene: '太乙长老授业', floor: w.floor, final_floor: w.finalFloor,
+        player: {
+          hp_ratio: +(p.hp / p.maxHp).toFixed(2), gold: p.gold, atk: p.atk, def: p.def,
+          realm_index: p.level, cursed: !!p.cursed, curse: (w.curseName || null), class: p.class,
+        },
+        note: '三个选项互斥且不可撤销；考验是 30% 中诅咒、70% 得灵气的赌局。',
+      },
+      questions: {
+        elder: {
+          type: 'choice',
+          instructions: '作为天师，为该玩家选一条修炼机缘。',
+          criteria: {
+            transmit: '传功：攻击 +3（永久）',
+            heal: '疗伤：立刻恢复 50 气血（不超过上限）',
+            gamble: '考验：30% 中「道心不稳」诅咒（升级所需经验 +50%），70% 得 50 灵气',
+          },
+        },
+      },
+    };
+  }
+
+  function skillPacket(u, w, skills) {
+    const dist = C.manhattan(u, w.player);
+    const criteria = { hold: '本回合不出技能' };
+    for (const s of skills) criteria['skill_' + s.name] = s.desc;
+    return {
+      state: {
+        scene: u.isBoss ? 'BOSS 技能时机' : '精英技能时机',
+        unit: { kind: u.name, boss: !!u.isBoss, hp_ratio: +(u.hp / u.maxHp).toFixed(2), atk: u.atk, skill_used: !!u.usedSkill },
+        player: { hp_ratio: +(w.player.hp / w.player.maxHp).toFixed(2), distance: dist, cursed: !!w.player.cursed, line_of_sight: C.lineOfSight(u.x, u.y, w.player.x, w.player.y, w) },
+        world: { floor: w.floor, final_floor: w.finalFloor },
+        note: '技能整局只能用一次（usedSkill 后不再询问）。',
+      },
+      questions: { skill: { type: 'choice', instructions: '为这名敌人决定本回合是否出技能、出哪个。', criteria } },
+    };
+  }
+
+  return { build, needsJudgment, elderPacket, skillPacket };
 });

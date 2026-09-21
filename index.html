@@ -77,6 +77,8 @@
       <div class="stat"><span class="stat-label">防御</span><span class="stat-value" id="defense">0</span></div>
       <div class="stat"><span class="stat-label">灵气</span><span class="stat-value" id="gold">0</span></div>
       <div class="stat"><span class="stat-label">层数</span><span class="stat-value" id="floor">1</span></div>
+      <div class="stat"><span class="stat-label">本层余敌</span><span class="stat-value" id="foes">0</span></div>
+      <div class="stat"><span class="stat-label">击杀</span><span class="stat-value" id="kills">0</span></div>
       <div class="curse-badge" id="curse"></div>
       <div class="curse-badge" id="key-badge" style="color: #22c55e; display: none;">🔑 钥匙</div>
       <div class="weapon-display"><span class="weapon-icon" id="weapon-icon">✊</span><span class="weapon-name" id="weapon-name">徒手</span></div>
@@ -93,7 +95,7 @@
       <div id="log"></div>
     </div>
   </div>
-  <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>R</kbd> 重新开始 | <kbd>J</kbd> 切换判断层 <span id="jev-chip" style="color:#a78bfa"></span></div>
+  <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>1</kbd><kbd>2</kbd> 技能 | <kbd>R</kbd> 重新开始 | <kbd>J</kbd> 切换判断层 <span id="jev-chip" style="color:#a78bfa"></span></div>
   <div class="mobile-controls">
     <div class="dpad">
       <button class="dpad-btn dpad-up" ontouchstart="handleTouch(event, 'up')">↑</button>
@@ -104,6 +106,7 @@
   </div>
   <div id="class-select" class="modal">
     <h2>✦ 选择修炼方向 ✦</h2>
+    <p style="font-size:0.55rem; color:#7dd3fc; margin-bottom:10px;">目标：下到第 10 层击败旱魃，渡劫飞升。<br>风险：陷阱可见可避 · 精英会下诅咒 · 每层只有 1 次商店 · 身死即重开</p>
     <div class="class-options">
       <div class="class-card" onclick="selectClass('医师')"><h3>🧑‍⚕️ 医师</h3><div class="desc">HP+20 防御+2</div><div class="skill">针灸暴击+30%</div></div>
       <div class="class-card" onclick="selectClass('炼药师')"><h3>⚗️ 炼药师</h3><div class="desc">攻击+3 HP-10</div><div class="skill">每层回复15HP</div></div>
@@ -120,6 +123,11 @@
     <p style="font-size:0.5rem; margin-bottom:10px;">每层只能购买 1 次</p>
     <div id="shop-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
     <button onclick="closeShop()" style="margin-top:20px;">离开商店</button>
+  </div>
+  <div id="elder-modal" class="modal hidden">
+    <h2>☯ 太乙长老</h2>
+    <p id="elder-ask" style="font-size:0.5rem; margin-bottom:10px;"></p>
+    <div id="elder-items" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
   </div>
   <script src="jev/core.js"></script>
   <script src="jev/questions.js"></script>
@@ -151,18 +159,18 @@
       { id: 'potion', name: '生命药水', price: 20, effect: { type: 'heal', value: 30 }, desc: 'HP +30' }
     ];
     let player, map, enemies, items, floor, logs, playerClass, curse, shopAllowed;
-    let busy = false, mapVersion = 0;
+    let busy = false, mapVersion = 0, deathBy = null;
     const QS = new URLSearchParams(location.search);
-    const jev = JEVClient.makeClient({ mode: QS.get('jev') || 'local', endpoint: QS.get('jevUrl') || '/decide' });
+    const jev = JEVClient.makeClient({ mode: QS.get('jev') || 'local', endpoint: QS.get('jevUrl') || '/decide', stakeDelta: +(QS.get('stake') || 2) });
     const JEV_WORLD = { map: null, width: WIDTH, height: HEIGHT, enemies: [], player: null, floor: 1, finalFloor: FINAL_FLOOR, mapSig: 'v0' };
-    function syncWorld() { JEV_WORLD.map = map; JEV_WORLD.enemies = enemies; JEV_WORLD.player = player; JEV_WORLD.floor = floor; JEV_WORLD.mapSig = 'v' + mapVersion; }
+    function syncWorld() { JEV_WORLD.map = map; JEV_WORLD.enemies = enemies; JEV_WORLD.player = player; JEV_WORLD.floor = floor; JEV_WORLD.curseName = curse; JEV_WORLD.mapSig = 'v' + mapVersion; }
     function updateJevChip() {
       const el = document.getElementById('jev-chip'); if (!el) return;
       const s = jev.stats;
       el.innerText = `☯ 判断层:${jev.cfg.mode}` + (s.calls ? ` 调用${s.calls} 直采${s.gated} 回退${s.fallbacks + s.errors}` : s.asks ? ` 提问${s.asks} 回退${s.fallbacks}` : '');
     }
     function cycleJev() {
-      const order = ['local', 'off', 'bridge'];
+      const order = ['local', 'norule', 'auto', 'bridge', 'off'];
       jev.cfg.mode = order[(order.indexOf(jev.cfg.mode) + 1) % order.length];
       jev.reset(); log(`☯ 判断层切换为 ${jev.cfg.mode}（off = 旧贪心，可对照手感差异）`, 'log-level'); updateJevChip();
     }
@@ -172,8 +180,8 @@
       jev.reset();
       const base = { '医师': { hp: 120, maxHp: 120, atk: 10, def: 2 }, '炼药师': { hp: 90, maxHp: 90, atk: 13, def: 0 }, '武痴': { hp: 110, maxHp: 110, atk: 15, def: -1 } };
       const s = base[playerClass];
-      player = { x: 1, y: 1, hp: s.hp, maxHp: s.maxHp, atk: s.atk, def: s.def, gold: 0, exp: 0, level: 0, expTo: 100, class: playerClass, weapon: 'fist', energy: 100, maxEnergy: 100, confused: false, tempBuffs: [], poison: 0, hasKey: false, cursed: false };
-      floor = 1; curse = null; shopAllowed = true; enemies = []; items = []; logs = [];
+      player = { x: 1, y: 1, hp: s.hp, maxHp: s.maxHp, atk: s.atk, def: s.def, gold: 0, exp: 0, level: 0, expTo: 100, class: playerClass, weapon: 'fist', energy: 100, maxEnergy: 100, kills: 0, confused: false, tempBuffs: [], poison: 0, hasKey: false, cursed: false };
+      floor = 1; curse = null; shopAllowed = true; deathBy = null; enemies = []; items = []; logs = [];
       document.getElementById('game-over').classList.add('hidden');
       generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld();
       log('☯ 欢迎来到阴阳道！击败旱魃，渡劫飞升！', 'log-item');
@@ -206,13 +214,13 @@
     }
     function spawnPlayer() { for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) if (map[y][x] === '.') { player.x = x; player.y = y; return; } }
     function spawnEnemies() {
-      enemies = []; const num = floor >= FINAL_FLOOR ? 5 : 3 + floor * 2;
+      enemies = []; const num = floor >= FINAL_FLOOR ? 5 : Math.min(3 + floor, 9);
       for (let i = 0; i < num; i++) {
         let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || (x === player.x && y === player.y));
         let type;
         if (floor >= FINAL_FLOOR && i === 0) type = 'D';
         else if (floor >= 2 && Math.random() < 0.2) { const elites = ['E', 'F', 'G']; type = elites[Math.floor(Math.random() * elites.length)]; }
-        else if (Math.random() < 0.6) type = 'g'; else type = 'z';
+        else if (floor >= 2 && Math.random() < 0.6) type = 'g'; else type = 'z';
         const data = ENEMIES[type];
         enemies.push({ id: 'f' + floor + '_' + i, x, y, type, name: data.name, hp: data.hp + floor * 5, maxHp: data.hp + floor * 5, atk: data.atk + floor * 2, def: data.def, exp: data.exp, gold: data.gold, isBoss: data.isBoss || false, isElite: data.isElite || false, skill: data.skill || null, skills: data.skills || [], usedSkill: false, poison: 0 });
       }
@@ -243,12 +251,12 @@
       document.getElementById('game').innerHTML = output;
     }
     async function move(dx, dy) {
-      if (busy) return;
+      if (busy || elderPending) return;
       const nx = player.x + dx, ny = player.y + dy;
       if (nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT || map[ny][nx] === '#') return;
       if (map[ny][nx] === 'X') { if (curse) { curse = null; log('✦ 祭坛祈福，诅咒解除！', 'log-heal'); } else log('✦ 太乙祭坛，可解除诅咒', 'log-item'); }
-      if (map[ny][nx] === 'v') { const trapDmg = 15 + Math.floor(floor * 2); player.hp -= trapDmg; log(`◈ 陷阱触发！损失${trapDmg}气血！`, 'log-damage'); if (player.hp <= 0) { gameOver(); return; } if (Math.random() < 0.3) map[ny][nx] = '.'; }
-      if (map[ny][nx] === 'O') { showElderChoice(); map[ny][nx] = '.'; }
+      if (map[ny][nx] === 'v') { const trapDmg = 15 + Math.floor(floor * 2); deathBy = '机关陷阱'; player.hp -= trapDmg; log(`◈ 陷阱触发！损失${trapDmg}气血！`, 'log-damage'); if (player.hp <= 0) { gameOver(); return; } if (Math.random() < 0.3) map[ny][nx] = '.'; }
+      if (map[ny][nx] === 'O') { map[ny][nx] = '.'; await showElderChoice(); }
       const enemy = enemies.find(e => e.x === nx && e.y === ny);
       if (enemy) { attack(enemy); busy = true; await enemyTurn(); busy = false; updateUI(); return; }
       if (map[ny][nx] === '>') { nextFloor(); return; }
@@ -275,32 +283,60 @@
         for (let i = 0; i < 2; i++) { let sx, sy; do { sx = Math.floor(Math.random() * WIDTH); sy = Math.floor(Math.random() * HEIGHT); } while (map[sy][sx] !== '.' || enemies.some(e => e.x === sx && e.y === sy)); enemies.push({ id: 's' + (mapVersion * 50 + enemies.length) + '_' + i, x: sx, y: sy, type: 'z', name: '游魂', hp: 15, maxHp: 15, atk: 5, def: 0, exp: 5, gold: 3, isBoss: false, isElite: false, poison: 0 }); }
         log(`◈ ${enemy.name}分裂成2个游魂！`, 'log-combat');
       }
-      if (enemy.hp <= 0) { log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win'); player.exp += enemy.exp; player.gold += enemy.gold; enemies = enemies.filter(e => e !== enemy); if (enemy.isBoss && floor >= FINAL_FLOOR) { setTimeout(victory, 1000); return; } if (player.exp >= player.expTo) levelUp(); }
+      if (enemy.hp <= 0) { log(`◈ 击败${enemy.name}！获得${enemy.exp}经验、${enemy.gold}灵气！`, 'log-win'); player.kills++; player.exp += enemy.exp; player.gold += enemy.gold; enemies = enemies.filter(e => e !== enemy); if (enemy.isBoss && floor >= FINAL_FLOOR) { setTimeout(victory, 1000); return; } if (player.exp >= player.expTo) levelUp(); }
     }
     function levelUp() { player.level++; player.exp -= player.expTo; player.expTo = Math.floor(player.expTo * 1.5); player.maxHp += 25; player.hp = player.maxHp; player.atk += 4; player.def += 2; log(`◈ ✦突破境界✦ 晋升${LEVELS[Math.min(player.level, LEVELS.length - 1)]}！`, 'log-level'); }
     async function enemyTurn() {
       if (player.confused) { player.confused = false; log('◈ 敌人被迷惑，跳过攻击！', 'log-skill'); return; }
       enemies.forEach(e => { if (e.poison > 0) { e.hp -= e.poison; log(`▸ ${e.name}中毒，-${e.poison}气血`, 'log-skill'); e.poison--; } });
-      enemies = enemies.filter(e => { if (e.hp <= 0) { log(`◈ ${e.name}中毒身亡！`, 'log-win'); player.exp += e.exp; player.gold += e.gold; return false; } return true; });
+      enemies = enemies.filter(e => { if (e.hp <= 0) { log(`◈ ${e.name}中毒身亡！`, 'log-win'); player.kills++; player.exp += e.exp; player.gold += e.gold; return false; } return true; });
       syncWorld();
       for (const enemy of enemies) {
-        if (enemy.isBoss && !enemy.usedSkill && enemy.hp < enemy.maxHp * 0.5) {
-          const skill = enemy.skills[Math.floor(Math.random() * enemy.skills.length)];
-          if (skill === '喷火') { const dist = Math.abs(player.x - enemy.x) + Math.abs(player.y - enemy.y); if (dist <= 3) { const d = Math.floor(enemy.atk * 1.2); player.hp -= d; log(`▸ ${enemy.name}喷火！${d}范围伤害！`, 'log-damage'); } enemy.usedSkill = true; }
-          else if (skill === '召唤') { let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y)); enemies.push({ id: 'b' + mapVersion + '_' + enemies.length, x, y, type: 'z', name: '僵尸', hp: 20, maxHp: 20, atk: 5, def: 0, exp: 10, gold: 5, poison: 0, usedSkill: false }); enemy.usedSkill = true; log(`▸ ${enemy.name}召唤僵尸！`, 'log-combat'); }
-        }
-        if (enemy.isElite && !enemy.usedSkill && enemy.skill === '诅咒' && Math.random() < 0.3) { player.cursed = true; log(`▸ ${enemy.name}施加诅咒！防御-30%！`, 'log-curse'); enemy.usedSkill = true; }
+        await trySkill(enemy);
         const { action } = await jev.decide(enemy, JEV_WORLD);
         if (!action) continue;
         if (action.kind === 'strike') {
           let dmg = Math.max(1, enemy.atk - player.def); if (player.cursed) dmg = Math.floor(dmg * 1.3); if (curse === '血光') dmg = Math.floor(dmg * 1.2);
-          if (enemy.skill === '反甲') { const reflect = Math.floor(dmg * 0.3); player.hp -= dmg; enemy.hp -= reflect; log(`▸ ${enemy.name}攻击${dmg}伤害，反甲反弹${reflect}！`, 'log-damage'); if (enemy.hp <= 0) { log(`◈ ${enemy.name}被反甲击杀！`, 'log-win'); player.exp += enemy.exp; player.gold += enemy.gold; enemies = enemies.filter(e => e !== enemy); JEV_WORLD.enemies = enemies; } }
-          else { player.hp -= dmg; log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage'); }
+          if (enemy.skill === '反甲') { const reflect = Math.floor(dmg * 0.3); deathBy = enemy.name + '（反甲）'; player.hp -= dmg; enemy.hp -= reflect; log(`▸ ${enemy.name}攻击${dmg}伤害，反甲反弹${reflect}！`, 'log-damage'); if (enemy.hp <= 0) { log(`◈ ${enemy.name}被反甲击杀！`, 'log-win'); player.exp += enemy.exp; player.gold += enemy.gold; enemies = enemies.filter(e => e !== enemy); JEV_WORLD.enemies = enemies; } }
+          else { deathBy = enemy.name; player.hp -= dmg; log(`▸ ${enemy.name}攻击，${dmg}伤害！`, 'log-damage'); }
           if (player.hp <= 0) { gameOver(); return; }
         } else if (action.kind === 'step') {
           if (!JEVCore.applyStep(enemy, action, JEV_WORLD)) jev.stats.illegal = (jev.stats.illegal || 0) + 1;
         }
       }
+      updateJevChip();
+    }
+    // 技能时机：旧代码是"血量过半就随机挑一个"和"30% 概率诅咒"，没有更好的规则
+    // → off/local 原样保留这套旧随机（作对照），auto/bridge 交给 Jev 判
+    function skillOptions(enemy) {
+      const dist = Math.abs(player.x - enemy.x) + Math.abs(player.y - enemy.y);
+      const out = [];
+      if (enemy.isBoss) {
+        if (enemy.skills.indexOf('喷火') >= 0 && dist <= 3 && JEVCore.lineOfSight(enemy.x, enemy.y, player.x, player.y, JEV_WORLD)) out.push({ name: '喷火', desc: `喷火：对 ${dist} 格外玩家造成 ${Math.floor(enemy.atk * 1.2)} 范围伤害` });
+        if (enemy.skills.indexOf('召唤') >= 0) out.push({ name: '召唤', desc: '召唤：在随机空格补一只僵尸' });
+      } else if (enemy.isElite && enemy.skill === '诅咒' && !player.cursed && dist <= 4) out.push({ name: '诅咒', desc: '诅咒：玩家防御 -30%（整局一次）' });
+      return out;
+    }
+    async function trySkill(enemy) {
+      if (enemy.usedSkill) return;
+      if (enemy.isBoss && !(enemy.hp < enemy.maxHp * 0.5)) return;
+      const opts = skillOptions(enemy);
+      if (!opts.length) return;
+      let pick;
+      if (jev.cfg.mode === 'off' || jev.cfg.mode === 'local') {
+        // 旧档是"每回合 30% 概率随机挑一个"；local 换成有理由的确定性规则：
+        // BOSS 够得着就喷火（唯一范围伤害），够不着就召唤施压；精英未被诅咒时立刻下咒
+        pick = enemy.isBoss ? (opts.some(o => o.name === '喷火') ? '喷火' : '召唤') : '诅咒';
+      } else {
+        const r = await jev.judge('skill', JEVQuestions.skillPacket(enemy, JEV_WORLD, opts), 'hold');
+        pick = r.value && r.value !== 'hold' ? r.value.slice(6) : null;
+        if (r.path === 'jev' && pick) log(`☯ ${enemy.name} 出「${pick}」（置信 ${r.confidence == null ? '?' : r.confidence.toFixed(2)}）`, 'log-skill');
+      }
+      if (!pick) return;
+      enemy.usedSkill = true;
+      if (pick === '喷火') { const d = Math.floor(enemy.atk * 1.2); deathBy = enemy.name + '喷火'; player.hp -= d; log(`▸ ${enemy.name}喷火！${d}范围伤害！`, 'log-damage'); if (player.hp <= 0) gameOver(); }
+      else if (pick === '召唤') { let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y)); enemies.push({ id: 'b' + mapVersion + '_' + enemies.length, x, y, type: 'z', name: '僵尸', hp: 20, maxHp: 20, atk: 5, def: 0, exp: 10, gold: 5, poison: 0, usedSkill: false }); log(`▸ ${enemy.name}召唤僵尸！`, 'log-skill'); }
+      else if (pick === '诅咒') { player.cursed = true; log(`▸ ${enemy.name}施加诅咒！防御-30%！`, 'log-curse'); }
       updateJevChip();
     }
     function renderSkills() { const c = document.getElementById('skills-list'); c.innerHTML = ''; SKILLS[player.class].forEach(s => { const btn = document.createElement('button'); btn.className = 'skill-btn'; btn.id = `skill-${s.id}`; btn.innerHTML = `${s.name} <span class="skill-cost">${s.cost}</span><br><span style="color:#888">${s.desc}</span>`; btn.onclick = () => castSkill(s.id); c.appendChild(btn); }); }
@@ -311,7 +347,7 @@
       else if (s.id === 'alchemy') { player.tempBuffs.push({ type: 'atk_mult', value: 0.5 }); log('◈ 炼丹生效，攻击力+50%！', 'log-skill'); }
       else if (s.id === 'confuse') { player.confused = true; log('◈ 迷惑敌人，本回合不攻击！', 'log-skill'); }
       else if (s.id === 'break_armor') { const n = nearest(); if (n) { n.def = Math.floor(n.def * 0.5); log(`◈ 破甲${n.name}！`, 'log-skill'); } }
-      else if (s.id === 'combo') { const n = nearest(); if (n) { const d = Math.max(1, player.atk - n.def) * 2; n.hp -= d; log(`◈ 连击${n.name}，${d}伤害！`, 'log-skill'); if (n.hp <= 0) { log(`◈ 击败${n.name}！获得${n.exp}经验、${n.gold}灵气！`, 'log-win'); player.exp += n.exp; player.gold += n.gold; enemies = enemies.filter(e => e !== n); if (player.exp >= player.expTo) levelUp(); } } }
+      else if (s.id === 'combo') { const n = nearest(); if (n) { const d = Math.max(1, player.atk - n.def) * 2; n.hp -= d; log(`◈ 连击${n.name}，${d}伤害！`, 'log-skill'); if (n.hp <= 0) { log(`◈ 击败${n.name}！获得${n.exp}经验、${n.gold}灵气！`, 'log-win'); player.kills++; player.exp += n.exp; player.gold += n.gold; enemies = enemies.filter(e => e !== n); if (player.exp >= player.expTo) levelUp(); } } }
       updateUI();
     }
     function nearest() { let n = null, min = Infinity; enemies.forEach(e => { const d = Math.abs(player.x - e.x) + Math.abs(player.y - e.y); if (d < min) { min = d; n = e; } }); return n; }
@@ -335,18 +371,42 @@
       if (floor >= FINAL_FLOOR) log('✦ 最后一层！击败旱魃，渡劫飞升！', 'log-level');
       if (player.class === '炼药师') { player.hp = Math.min(player.maxHp, player.hp + 15); log('◈ 炼丹回复15气血！', 'log-skill'); }
       if (floor < FINAL_FLOOR && floor > 1 && !curse && Math.random() < 0.25) { const curses = { '血光': '受伤+20%', '灵气流失': '灵气-30%', '道心不稳': '经验+50%' }; const names = Object.keys(curses); curse = names[Math.floor(Math.random() * names.length)]; log(`⚠️ ${curse}：${curses[curse]}`, 'log-curse'); if (curse === '灵气流失') player.gold = Math.floor(player.gold * 0.7); if (curse === '道心不稳') player.expTo = Math.floor(player.expTo * 1.5); }
-      player.cursed = false; log(`▸ 进入第${floor}层...`, 'log-level');
+      player.cursed = false; log(`▸ 进入第${floor}层：敌人气血 +${floor * 5}、攻击 +${floor * 2}${floor >= FINAL_FLOOR ? '，旱魃在此' : ''}`, 'log-level');
       generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); syncWorld(); jev.reset(); updateUI();
     }
-    function showElderChoice() {
-      const choice = confirm('神秘老人：选择修炼方向\n\n确定 = 传功 (攻击+3)\n取消 = 其他选择');
-      if (choice) { player.atk += 3; log('◈ 老人传授功法，攻击+3！', 'log-item'); return; }
-      const gamble = confirm('确定 = 疗伤 (恢复50气血)\n取消 = 考验 (30%诅咒, 70%灵气+50)');
-      if (gamble) { player.hp = Math.min(player.maxHp, player.hp + 50); log('◈ 老人施展神通，恢复50气血！', 'log-heal'); }
+    const ELDER_OPTIONS = {
+      transmit: { name: '传功', desc: '攻击 +3（永久）' },
+      heal: { name: '疗伤', desc: '立刻恢复 50 气血（不超上限）' },
+      gamble: { name: '考验', desc: '30% 中「道心不稳」诅咒 / 70% 得 50 灵气' },
+    };
+    let elderPending = false;
+    async function showElderChoice() {
+      syncWorld();
+      const asked = await jev.judge('elder', JEVQuestions.elderPacket(JEV_WORLD), null);
+      if (asked.value) {
+        // Jev 决策：三档概率一并留档，事后可审计它当时是怎么选的
+        const probs = asked.probabilities ? '｜' + Object.entries(asked.probabilities).map(([k, v]) => `${(ELDER_OPTIONS[k] || { name: k }).name} ${Math.round(v * 100)}%`).join(' ') : '';
+        log(`☯ 天师卜卦：${ELDER_OPTIONS[asked.value].name}（置信 ${asked.confidence == null ? '?' : asked.confidence.toFixed(2)}）${probs}`, 'log-level');
+        applyElder(asked.value); updateJevChip(); return;
+      }
+      renderElderModal(); // off/local：这里没有更好的规则，交回玩家，不假装启发式会算
+    }
+    function renderElderModal() {
+      elderPending = true;
+      const c = document.getElementById('elder-items'); c.innerHTML = '';
+      Object.keys(ELDER_OPTIONS).forEach((k) => { const o = ELDER_OPTIONS[k]; const d = document.createElement('div'); d.className = 'shop-item'; d.innerHTML = `<h3>${o.name}</h3><p>${o.desc}</p>`; d.onclick = () => pickElder(k); c.appendChild(d); });
+      document.getElementById('elder-ask').innerText = '三个选项互斥且不可撤销';
+      document.getElementById('elder-modal').classList.remove('hidden');
+    }
+    function pickElder(k) { document.getElementById('elder-modal').classList.add('hidden'); elderPending = false; applyElder(k); }
+    function applyElder(k) {
+      if (k === 'transmit') { player.atk += 3; log('◈ 老人传授功法，攻击+3！', 'log-item'); }
+      else if (k === 'heal') { player.hp = Math.min(player.maxHp, player.hp + 50); log('◈ 老人施展神通，恢复50气血！', 'log-heal'); }
       else if (Math.random() < 0.3) { curse = '道心不稳'; player.expTo = Math.floor(player.expTo * 1.5); log('◈ 考验失败！诅咒：道心不稳', 'log-curse'); }
       else { player.gold += 50; log('◈ 考验通过！获得50灵气！', 'log-item'); }
+      updateUI();
     }
-    function gameOver() { const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; document.getElementById('go-msg').innerText = `第${floor}层 ${realm} | 灵气${player.gold}`; document.getElementById('game-over').classList.remove('hidden'); log('✦ 身死道消...', 'log-death'); }
+    function gameOver() { const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; document.getElementById('go-msg').innerText = `死于 ${deathBy || '不明'} ｜ 第${floor}层 ${realm} ｜ 灵气${player.gold}`; document.getElementById('game-over').classList.remove('hidden'); log('✦ 身死道消...', 'log-death'); }
     function victory() {
       const realm = LEVELS[Math.min(player.level, LEVELS.length - 1)]; log(`✦ 渡劫成功！${realm}位列仙班！`, 'log-win');
       const div = document.createElement('div'); div.className = 'modal'; div.id = 'victory-modal';
@@ -362,9 +422,10 @@
       if (player.class) SKILLS[player.class].forEach(s => { const btn = document.getElementById(`skill-${s.id}`); if (btn) btn.disabled = player.energy < s.cost; });
       const ce = document.getElementById('curse'); if (curse) { ce.innerText = `⚠ ${curse}`; ce.style.display = 'block'; } else ce.style.display = 'none';
       document.getElementById('key-badge').style.display = player.hasKey ? 'block' : 'none';
+      document.getElementById('foes').innerText = enemies.length; document.getElementById('kills').innerText = player.kills || 0;
       updateWeaponDisplay(); render();
     }
-    document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'j') { cycleJev(); return; } const k = e.key.toLowerCase(); if (k === 'w' || k === 'arrowup') move(0, -1); else if (k === 's' || k === 'arrowdown') move(0, 1); else if (k === 'a' || k === 'arrowleft') move(-1, 0); else if (k === 'd' || k === 'arrowright') move(1, 0); else if (k === 'r') showClassSelect(); });
+    document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'j') { cycleJev(); return; } const k = e.key.toLowerCase(); if (k === 'w' || k === 'arrowup') move(0, -1); else if (k === 's' || k === 'arrowdown') move(0, 1); else if (k === 'a' || k === 'arrowleft') move(-1, 0); else if (k === 'd' || k === 'arrowright') move(1, 0); else if (k === 'r') showClassSelect(); else if (k === '1' || k === '2') { const sk = SKILLS[player.class] && SKILLS[player.class][+k - 1]; if (sk) castSkill(sk.id); } });
     document.getElementById('class-select').classList.remove('hidden');
     function handleTouch(e, dir) { e.preventDefault(); if (dir === 'up') move(0, -1); else if (dir === 'down') move(0, 1); else if (dir === 'left') move(-1, 0); else if (dir === 'right') move(1, 0); }
   </script>

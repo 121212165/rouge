@@ -80,7 +80,9 @@ def to_typed(questions: dict):
             if kind == "choice":
                 out[qid] = Choice(instructions=q["instructions"], criteria=criteria)
             else:
-                out[qid] = Score(instructions=q["instructions"], criteria=criteria)
+                # SDK 要求 Score 的 criteria 是序列：按数字键序展开成档位列表
+                seq = [criteria[k] for k in sorted(criteria, key=lambda x: int(x) if str(x).isdigit() else x)] if isinstance(criteria, dict) else list(criteria)
+                out[qid] = Score(instructions=q["instructions"], criteria=seq)
     return out
 
 

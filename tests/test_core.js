@@ -90,14 +90,73 @@ test('gate：置信不足时不 argmax，改用同请求 Noul 头', () => {
   assert.equal(P.gate(illegal, u, w, ctx, {}).reason, '非法标签');
 });
 
-test('桥不可用时降级到 local 并计入 errors（不静默、不卡回合）', async () => {
+test('网络档不阻塞回合：先按 local 行动，桥挂了计入 errors 而不是卡住', async () => {
   const u = unit(1, 1);
   const w = world(MAZE, 5, 3, [u]);
   const jev = Client.makeClient({ mode: 'bridge', endpoint: 'http://127.0.0.1:59999/decide', timeoutMs: 300 });
-  const { action, path: p } = await jev.decide(u, w);
-  assert.equal(p, 'fallback');
-  assert.ok(action);
-  assert.equal(jev.stats.errors, 1);
+  const first = await jev.decide(u, w);
+  assert.equal(first.path, 'advisory_pending', '第一回合答案还没回来，必须立刻动');
+  assert.ok(first.action);
+  await new Promise((r) => setTimeout(r, 120));
+  await jev.decide(u, w);
+  assert.ok(jev.stats.errors >= 1, '桥不可用要计入 errors');
+  assert.ok(jev.stats.calls >= 1, '后台确实在问');
+});
+
+test('stakes：选项等价不值得问，路线分岔大或能贴脸才算高注', () => {
+  const u = unit(1, 1);
+  const ctxOpen = C.legalActions(u, world(['#####', '#...#', '#####'], 4, 1, [u]), {});
+  assert.equal(P.stakes(ctxOpen, 2).hasStrike, false);
+  const adj = unit(3, 1);
+  const ctxAdj = C.legalActions(adj, world(['#####', '#...#', '#####'], 2, 1, [adj]), {});
+  assert.equal(P.stakes(ctxAdj, 2).hasStrike, true, '能攻击就是高注，必须问');
+  const dead = unit(1, 1);
+  const ctxDead = C.legalActions(dead, world(MAZE, 5, 3, [dead]), {});
+  const onlyOne = ctxDead.offered.filter((a) => a.kind === 'step').length;
+  assert.ok(onlyOne >= 1 && typeof P.stakes(ctxDead, 2).spread === 'number');
+});
+
+test('auto 档：低分歧直接走 local 且零网络调用', async () => {
+  const u = unit(1, 1);
+  const w = world(['#####', '#...#', '#####'], 4, 1, [u]);
+  const jev = Client.makeClient({ mode: 'auto', endpoint: 'http://127.0.0.1:59999/decide' });
+  const st = P.stakes(C.legalActions(u, w, {}), 2);
+  await jev.decide(u, w);
+  if (st.high) {
+    assert.ok(jev.stats.escalated === 1, '高注应升级');
+  } else {
+    assert.equal(jev.stats.calls, 0, '低分歧不该发请求');
+    assert.equal(jev.stats.low_stakes, 1);
+  }
+});
+
+test('judge：只有合法标签 + 足够置信才采用，否则回旧规则', async () => {
+  const realFetch = globalThis.fetch;
+  const answer = (choice, confidence) => async () => ({ ok: true, json: async () => ({ answers: { elder: { type: 'choice', choice, confidence, probabilities: { transmit: 0.2, heal: 0.3, gamble: 0.5 } } }, usage: { model: 'fake', input_tokens: 100 } }) });
+  const w = world(['#####', '#...#', '#####'], 1, 1, [unit(3, 1)]);
+  const packet = { state: {}, questions: { elder: { type: 'choice', instructions: '', criteria: { transmit: 'a', heal: 'b', gamble: 'c' } } } };
+  try {
+    const settle = async (j, name, pkt, legacy) => { await j.judge(name, pkt, legacy); await new Promise((r) => setTimeout(r, 20)); return j.judge(name, pkt, legacy); };
+
+    globalThis.fetch = answer('heal', 0.8);
+    const j1 = Client.makeClient({ mode: 'bridge', endpoint: '/x' });
+    const pending = await j1.judge('elder', packet, 'transmit');
+    assert.equal(pending.path, 'advisory_pending', '答案没回来前不阻塞');
+    const good = await settle(j1, 'elder', packet, 'transmit');
+    assert.equal(good.value, 'heal'); assert.equal(good.path, 'jev');
+
+    globalThis.fetch = answer('nonsense', 0.99);
+    const illegal = await settle(Client.makeClient({ mode: 'bridge', endpoint: '/x' }), 'elder', packet, 'transmit');
+    assert.equal(illegal.value, 'transmit', '非法标签必须回旧规则');
+    assert.equal(illegal.reason, '非法标签：nonsense');
+
+    globalThis.fetch = answer('gamble', 0.3);
+    const unsure = await settle(Client.makeClient({ mode: 'bridge', endpoint: '/x', auto: 0.6 }), 'elder', packet, 'transmit');
+    assert.equal(unsure.value, 'transmit', '置信不足必须回旧规则');
+
+    const offline = await Client.makeClient({ mode: 'local', endpoint: '/x' }).judge('elder', packet, 'transmit');
+    assert.equal(offline.value, 'transmit'); assert.equal(offline.path, 'no_rule_local');
+  } finally { globalThis.fetch = realFetch; }
 });
 
 test('执行前重校验：await 期间场景指纹变了就不落地', async () => {

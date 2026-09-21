@@ -64,5 +64,15 @@
     return Object.assign(trace, { path: 'fallback', reason: '低于自动阈值且 Noul 头未过门' });
   }
 
-  return { baseline, local, gate, stepsBy, sortedEntries };
+  // stakes = 这个决定值不值得花钱问：候选之间"绕行步数"差得越多越值得问；
+  // 贴脸砍人不值得问（local 就会砍），只有换血明显不划算才是真歧义
+  function stakes(ctx, delta) {
+    const steps = ctx.offered.filter((a) => a.kind === 'step').map((a) => (a.viaAfter == null ? BIG : a.viaAfter));
+    const spread = steps.length >= 2 ? Math.max(...steps) - Math.min(...steps) : 0;
+    const strike = C.find(ctx.offered, C.STRIKE);
+    const badTrade = !!strike && ctx.est.turnsToDieStanding <= ctx.est.turnsToKillPlayer;
+    return { spread, hasStrike: !!strike, badTrade, high: badTrade || spread >= (delta == null ? 2 : delta) };
+  }
+
+  return { baseline, local, gate, stepsBy, sortedEntries, stakes };
 });

@@ -24,7 +24,11 @@ start index.html            # Windows；或 python -m http.server 8000
 JEV_UPSTREAM=stub py -3.12 jev_bridge.py     # http://127.0.0.1:8731/?jev=bridge
 ```
 
-按 `J` 循环切换判断层：`local`（默认）→ `off`（旧贪心，可对比手感）→ `bridge`（问 Jev）。
+按 `J` 循环切换判断层：`local`（默认）→ `norule`（**推荐上架配置**：寻路零调用，只有没规则的地方问 Jev）→ `auto`（分歧大才问）→ `bridge`（都问）→ `off`（旧贪心，可对比手感）。
+
+## 上架闸门
+
+`node harness/release_gate.js` —— 15 项确定性否决（测试、夹具、包体、密钥、输入不被阻塞、死因可归因、终局可达…）全绿后，才让 Jev 对四个模糊维度打分。当前判定：**HOLD**（准备度 2.31/4，置信 0.56），Jev 指认的卡点是缺真人试玩证据，且明说加回成就/多周目也不足以放行。详见 `jev/README.md` 的"已知边界"。
 
 ## 验证
 
