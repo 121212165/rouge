@@ -24,3 +24,16 @@ jobs:
           node-version: "20"
       - run: npm ci 2>/dev/null || npm install 2>/dev/null || true
       - run: npx eslint . --ext .js 2>/dev/null || echo "No ESLint config"
+
+  # 判断层不需要 key，也就不该依赖有没有 key
+  judgment-layer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: 单元与控件校验（合法域 / 硬否决 / 门控 / 降级）
+        run: node --test tests/test_core.js
+      - name: 夹具自检 + 离线消融（off vs local）
+        run: node harness/run_ablation.js --policies=off,local
