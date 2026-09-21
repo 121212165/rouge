@@ -1,0 +1,83 @@
+{
+  "round": 3,
+  "title": "第三轮：重构后靠什么保证不弄坏",
+  "at": "2026-09-21T23:46:43.723Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 336,
+  "answers": {
+    "test_arch": "contract_gate",
+    "catches_this_session_bugs": "1.34 / 4 档",
+    "feedback_speed": "0.82 / 4 档",
+    "browser_still_needed": "0.75",
+    "tests_will_lie": "0.54"
+  },
+  "confidence": {
+    "test_arch": 0.59,
+    "catches_this_session_bugs": 0.26,
+    "feedback_speed": 0.32
+  },
+  "raw": {
+    "test_arch": {
+      "type": "choice",
+      "choice": "contract_gate",
+      "confidence": 0.59,
+      "probabilities": {
+        "property_tests": 0.01,
+        "pure_rules_unit": 0.3,
+        "typecheck": 0,
+        "mutation_check": 0.01,
+        "golden_replay": 0.01,
+        "contract_gate": 0.63,
+        "runtime_invariants": 0.01,
+        "headless_dom": 0.01,
+        "dual_run_diff": 0.02
+      }
+    },
+    "catches_this_session_bugs": {
+      "type": "score",
+      "score": 1.34,
+      "confidence": 0.26,
+      "legend": {
+        "0": "抓住 0 个",
+        "1": "抓住 1-2 个",
+        "2": "抓住 3 个",
+        "3": "抓住 4 个",
+        "4": "抓住全部 5 个"
+      },
+      "probabilities": {
+        "0": 0.27,
+        "1": 0.33,
+        "2": 0.23,
+        "3": 0.13,
+        "4": 0.04
+      }
+    },
+    "feedback_speed": {
+      "type": "score",
+      "score": 0.82,
+      "confidence": 0.32,
+      "legend": {
+        "0": "分钟级以上且依赖起浏览器",
+        "1": "分钟级",
+        "2": "十秒级",
+        "3": "秒级",
+        "4": "亚秒级"
+      },
+      "probabilities": {
+        "0": 0.63,
+        "1": 0.1,
+        "2": 0.11,
+        "3": 0.14,
+        "4": 0.02
+      }
+    },
+    "browser_still_needed": {
+      "type": "noul",
+      "noul": 0.75
+    },
+    "tests_will_lie": {
+      "type": "noul",
+      "noul": 0.54
+    }
+  }
+}

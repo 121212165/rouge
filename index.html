@@ -311,6 +311,7 @@
   </div>
   <script src="insight.js"></script>
   <script src="jev/gamedata.js"></script>
+  <script src="jev/rng.js"></script>
   <script src="jev/core.js"></script>
   <script src="jev/questions.js"></script>
   <script src="jev/policies.js"></script>
@@ -363,6 +364,18 @@
     ];
     let player, map, enemies, items, floor, logs, playerClass, curse, shopAllowed;
     let busy = false, mapVersion = 0, deathBy = null, dead = false, shopSpent = false;
+    /* 确定性随机（架构议会第四轮 state_model=seeded_rng 0.56、第六轮 do_now=seed_and_diff 0.76）。
+       现状实测 reproducible_bugs 0.04 / 置信 0.97 —— 线上报来的某一局本来完全无法复现。
+       ?seed=xxxxx 可以精确重放一局；seed 会进诊断包，所以玩家报障时自然带上来。 */
+    // 这里绝不能在声明时就读 QS —— QS 在下面的脚本尾部才初始化，
+    // 顶层 let 的初始化器会立刻执行，撞上 TDZ 会让整段内联脚本静默中止（本会话已犯过两次同类）。
+    let RUN_SEED = null, RNG = Math.random;
+    function rng() { return RNG(); }
+    function rollSeed() {
+      RUN_SEED = new URLSearchParams(location.search).get('seed') || Rng.newSeed();
+      RNG = Rng.makeRng(RUN_SEED);
+      return RUN_SEED;
+    }
     const insight = Insight.make({ endpoint: new URLSearchParams(location.search).get('tlUrl') || null });
     const QS = new URLSearchParams(location.search);
     const jev = JEVClient.makeClient({ mode: QS.get('jev') || 'local', endpoint: QS.get('jevUrl') || '/decide', stakeDelta: +(QS.get('stake') || 2) });
@@ -442,7 +455,7 @@
     function selectClass(cls) { insight.ev('class_pick', { cls }); playerClass = cls; document.getElementById('class-select').classList.add('hidden'); initGame(); maybeShowTutorial(); }
     function openFeedback() {
       const d = insight.diag();
-      document.getElementById('fb-diag').innerText = `回合延迟 p50 ${d.turn_ms ? d.turn_ms.p50 : '?'}ms / p95 ${d.turn_ms ? d.turn_ms.p95 : '?'}ms · 事件 ${d.events} 条 · 报错 ${d.errors.length} · 判断层 ${d.env.mode} · 时区 ${d.env.tz} · 存储 ${d.storage ? 'OK' : '不可用'}` + (d.errors.length ? ' ｜ ' + d.errors.map(e => e.msg).join(' ｜ ') : '');
+      document.getElementById('fb-diag').innerText = `本局种子 ${RUN_SEED} · 回合延迟 p50 ${d.turn_ms ? d.turn_ms.p50 : '?'}ms / p95 ${d.turn_ms ? d.turn_ms.p95 : '?'}ms · 事件 ${d.events} 条 · 报错 ${d.errors.length} · 判断层 ${d.env.mode} · 时区 ${d.env.tz} · 存储 ${d.storage ? 'OK' : '不可用'}` + (d.errors.length ? ' ｜ ' + d.errors.map(e => e.msg).join(' ｜ ') : '');
       document.getElementById('fb-opt').checked = insight.state.enabled;
       document.getElementById('fb-status').className = 'fb-status';
       document.getElementById('fb-raw').classList.add('hidden');
@@ -493,27 +506,29 @@
         qi: { chain: [], armed: false },
         mod: { atk: 0, def: 0, maxhp: 0, hp_regen: 0, gold_mult: 0, hurt_mult: 0, burn: 0, no_skill: false, exp_mult: 0, reflect: 0, shop_half: false, hp_leak: 0, pierce: 0 },
         sha: 0 };
+      rollSeed();
       floor = 1; curse = null; shopAllowed = true; deathBy = null; dead = false; shopSpent = false; enemies = []; items = []; logs = [];
       document.getElementById('game-over').classList.add('hidden');
       generateMap(); spawnPlayer(); spawnEnemies(); spawnItems(); spawnRelics(); syncWorld(); insight.startRun(playerClass); insight.ev('floor_enter', { floor, foes: enemies.length });
-      log('☯ 欢迎来到阴阳道！击败旱魃，渡劫飞升！', 'log-item');
+      insight.ev('run_seed', { seed: RUN_SEED, cls: playerClass });
+      log(`☯ 欢迎来到阴阳道！击败旱魃，渡劫飞升！（本局种子 ${RUN_SEED}，用 ?seed=${RUN_SEED} 可完整重放）`, 'log-item');
       renderSkills(); updateUI();
     }
     function generateMap() {
       mapVersion++; map = Array.from({ length: HEIGHT }, () => Array(WIDTH).fill('#'));
-      const rooms = []; const numRooms = 5 + Math.floor(Math.random() * 4);
+      const rooms = []; const numRooms = 5 + Math.floor(rng() * 4);
       for (let i = 0; i < numRooms; i++) {
-        const w = 4 + Math.floor(Math.random() * 4), h = 3 + Math.floor(Math.random() * 3);
-        const x = 1 + Math.floor(Math.random() * (WIDTH - w - 2)), y = 1 + Math.floor(Math.random() * (HEIGHT - h - 2));
+        const w = 4 + Math.floor(rng() * 4), h = 3 + Math.floor(rng() * 3);
+        const x = 1 + Math.floor(rng() * (WIDTH - w - 2)), y = 1 + Math.floor(rng() * (HEIGHT - h - 2));
         rooms.push({ x, y, w, h });
         for (let ry = y; ry < y + h; ry++) for (let rx = x; rx < x + w; rx++) map[ry][rx] = '.';
       }
-      if (curse && Math.random() < 0.3) { const r = rooms[Math.floor(Math.random() * rooms.length)]; map[Math.floor(r.y + r.h / 2)][Math.floor(r.x + r.w / 2)] = 'X'; }
+      if (curse && rng() < 0.3) { const r = rooms[Math.floor(rng() * rooms.length)]; map[Math.floor(r.y + r.h / 2)][Math.floor(r.x + r.w / 2)] = 'X'; }
       rooms.forEach((r, idx) => {
         if (idx === 0) return;
         const cx = Math.floor(r.x + r.w / 2), cy = Math.floor(r.y + r.h / 2);
-        if (Math.random() < 0.15 && map[cy][cx] === '.') map[cy][cx] = 'v';
-        if (Math.random() < 0.1 && map[cy][cx - 1] === '.') map[cy][cx - 1] = 'O';
+        if (rng() < 0.15 && map[cy][cx] === '.') map[cy][cx] = 'v';
+        if (rng() < 0.1 && map[cy][cx - 1] === '.') map[cy][cx - 1] = 'O';
       });
       for (let i = 1; i < rooms.length; i++) {
         const r1 = rooms[i - 1], r2 = rooms[i];
@@ -528,22 +543,22 @@
     function spawnEnemies() {
       enemies = []; const num = floor >= FINAL_FLOOR ? 5 : Math.min(3 + floor + (hasFx('greed') ? 2 : 0), 11);
       for (let i = 0; i < num; i++) {
-        let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || (x === player.x && y === player.y));
+        let x, y; do { x = Math.floor(rng() * WIDTH); y = Math.floor(rng() * HEIGHT); } while (map[y][x] !== '.' || (x === player.x && y === player.y));
         let type;
         if (floor >= FINAL_FLOOR && i === 0) type = 'D';
-        else if (floor >= 2 && Math.random() < 0.2) { const elites = ['E', 'F', 'G']; type = elites[Math.floor(Math.random() * elites.length)]; }
-        else if (floor >= 2 && Math.random() < 0.6) type = 'g'; else type = 'z';
+        else if (floor >= 2 && rng() < 0.2) { const elites = ['E', 'F', 'G']; type = elites[Math.floor(rng() * elites.length)]; }
+        else if (floor >= 2 && rng() < 0.6) type = 'g'; else type = 'z';
         const data = ENEMIES[type];
         enemies.push({ id: 'f' + floor + '_' + i, x, y, type, name: data.name, el: data.el || null, hp: data.hp + floor * 5, maxHp: data.hp + floor * 5, atk: data.atk + floor * 2, def: data.def, exp: data.exp, gold: data.gold, isBoss: data.isBoss || false, isElite: data.isElite || false, skill: data.skill || null, skills: data.skills || [], usedSkill: false, poison: 0 });
       }
     }
     function spawnItems() {
-      items = []; const num = 2 + Math.floor(Math.random() * 3);
-      if (Math.random() < 0.2) { let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y)); items.push({ x, y, ...ITEMS['K'] }); }
-      if (Math.random() < 0.15) { let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || items.some(i => i.x === x && i.y === y)); items.push({ x, y, ...ITEMS['B'] }); }
+      items = []; const num = 2 + Math.floor(rng() * 3);
+      if (rng() < 0.2) { let x, y; do { x = Math.floor(rng() * WIDTH); y = Math.floor(rng() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y)); items.push({ x, y, ...ITEMS['K'] }); }
+      if (rng() < 0.15) { let x, y; do { x = Math.floor(rng() * WIDTH); y = Math.floor(rng() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || items.some(i => i.x === x && i.y === y)); items.push({ x, y, ...ITEMS['B'] }); }
       for (let i = 0; i < num; i++) {
-        let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || items.some(it => it.x === x && it.y === y));
-        const r = Math.random();
+        let x, y; do { x = Math.floor(rng() * WIDTH); y = Math.floor(rng() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y) || items.some(it => it.x === x && it.y === y));
+        const r = rng();
         if (r < 0.1) items.push({ x, y, name: '雷锤', type: 'weapon', weaponKey: 'hammer' });
         else if (r < 0.3) items.push({ x, y, name: '太极剑', type: 'weapon', weaponKey: 'sword' });
         else if (r < 0.6) items.push({ x, y, ...ITEMS['!'] });
@@ -572,15 +587,15 @@
       const place = (tier, lo, hi) => {
         const pool = band(lo, hi).filter(s => !taken.has(s.x + ',' + s.y));
         if (!pool.length) return;
-        const spot = pool[Math.floor(Math.random() * pool.length)]; taken.add(spot.x + ',' + spot.y);
+        const spot = pool[Math.floor(rng() * pool.length)]; taken.add(spot.x + ',' + spot.y);
         const cands = GameData.RELICS.filter(r => r.tier === tier);
-        const r = cands[Math.floor(Math.random() * cands.length)];
+        const r = cands[Math.floor(rng() * cands.length)];
         items.push({ x: spot.x, y: spot.y, type: 'relic', id: r.id, tier: r.tier, name: r.name });
       };
       // 第一层保底掉一件凡品在安全带：构筑轴得先被玩家遇到，才谈得上取舍
       if (floor === 1) place(1, 0.6, 1);
       for (let i = 0; i < (floor >= 4 ? 2 : 1); i++) {
-        const roll = Math.random();
+        const roll = rng();
         const p3 = Math.min(0.26, 0.04 + floor * 0.03), p2 = p3 + 0.3;
         const tier = roll < p3 ? 3 : roll < p2 ? 2 : 1;
         // 档位→危险度分位带：仙品仍在最危险的前 30%，但不至于永远够不着
@@ -601,16 +616,32 @@
       return { g: t.g, fg: t.fg, bg: t.bg, ring: el ? GameData.WUXING_COLORS[el] : null,
         pulse: ch === '@' && !!player && player.qi.armed ? GameData.WUXING_COLORS[player.qi.chain[player.qi.chain.length - 1] || player.el] : null };
     }
-    function tileHtml(ch) {
-      const s = tileStyle(ch);
-      const ring = s.ring ? `box-shadow:inset 0 0 0 2px ${s.ring};` : '';
-      const bg = s.pulse ? `background:${s.pulse};color:#080b16;animation:qiPulse .55s ease-in-out infinite alternate;` : `background:${s.bg};`;
-      return `<i style="color:${s.fg};${bg}${ring}">${s.g}</i>`;
+    // 只重绘变化的格子（第五轮 render_arch=dom_diff 0.51、第六轮 do_now=seed_and_diff 0.76）。
+    // 旧写法每回合把 375 个 <i> 全量 innerHTML 重建，手机上等于每步重排整棵树。
+    let CELLS = null, PAINTED = null;
+    function tileKey(ch) {
+      if (ch !== '@') return ch;
+      return '@' + (player ? player.el : '?') + (player && player.qi.armed ? '!' : '');
     }
     function render() {
-      const cells = [];
-      for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) cells.push(tileHtml(getChar(x, y)));
-      document.getElementById('game').innerHTML = cells.join('');
+      const host = document.getElementById('game');
+      if (!CELLS || host.childElementCount !== WIDTH * HEIGHT) {
+        host.textContent = ''; CELLS = []; PAINTED = [];
+        for (let i = 0; i < WIDTH * HEIGHT; i++) {
+          const c = document.createElement('i'); host.appendChild(c); CELLS.push(c); PAINTED.push(null);
+        }
+      }
+      for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
+        const i = y * WIDTH + x, ch = getChar(x, y), key = tileKey(ch);
+        if (PAINTED[i] === key) continue;
+        PAINTED[i] = key;
+        const s = tileStyle(ch), el = CELLS[i];
+        el.textContent = s.g;
+        el.style.color = s.fg;
+        el.style.background = s.pulse || s.bg;
+        el.style.boxShadow = s.ring ? `inset 0 0 0 2px ${s.ring}` : 'none';
+        el.style.animation = s.pulse ? 'qiPulse .55s ease-in-out infinite alternate' : 'none';
+      }
     }
     async function move(dx, dy) {
       if (dead) { insight.ev('key_after_death', {}); return; }
@@ -631,7 +662,7 @@
         else {
           firstTip('trap', '☄ 陷阱 v 看得见、可以绕开，踩上才损血'); const trapDmg = 15 + Math.floor(floor * 2);
           deathBy = '机关陷阱'; const applied = hurtPlayer(trapDmg, null); log(`◈ 陷阱触发！损失${applied}气血！`, 'log-damage'); updateUI();
-          if (player.hp <= 0) { gameOver(); return; } if (Math.random() < 0.3) map[ny][nx] = '.';
+          if (player.hp <= 0) { gameOver(); return; } if (rng() < 0.3) map[ny][nx] = '.';
         }
       }
       if (map[ny][nx] === 'O') { firstTip('elder', '☄ 长老 O 给三个互斥机缘，选定不能改'); map[ny][nx] = '.'; await showElderChoice(); }
@@ -713,7 +744,7 @@
       setTimeout(() => { g.style.boxShadow = ''; g.classList.remove('shake'); }, 320);
     }
     function attack(enemy) {
-      let isCrit = player.class === '医师' && Math.random() < 0.3;
+      let isCrit = player.class === '医师' && rng() < 0.3;
       let baseAtk = playerAtk(); player.tempBuffs.forEach(b => { if (b.type === 'atk_mult') baseAtk = Math.floor(baseAtk * (1 + b.value)); });
       const myEl = player.el;
       const pierce = Math.min(1, (player.mod.pierce || 0) + (player.reveal > 0 ? 1 : 0));
@@ -725,8 +756,8 @@
       qiAbsorb(enemy.el);
       if (player.qi.armed) { firstTip('qi', '☄ 一气连环：每打一个敌人吸它的属性，下一口要被上一口相生（金→水→木→火→土→金）才续得上，串满 3 口自动引爆'); qiBurst(enemy, dmg); return; }
       enemy.hp -= dmg;
-      if (enemy.skill === '分裂' && enemy.hp <= 0 && Math.random() < 0.5) {
-        for (let i = 0; i < 2; i++) { let sx, sy; do { sx = Math.floor(Math.random() * WIDTH); sy = Math.floor(Math.random() * HEIGHT); } while (map[sy][sx] !== '.' || enemies.some(e => e.x === sx && e.y === sy)); enemies.push({ id: 's' + (mapVersion * 50 + enemies.length) + '_' + i, x: sx, y: sy, type: 'z', el: ENEMIES['z'].el, name: '游魂', hp: 15, maxHp: 15, atk: 5, def: 0, exp: 5, gold: 3, isBoss: false, isElite: false, poison: 0 }); }
+      if (enemy.skill === '分裂' && enemy.hp <= 0 && rng() < 0.5) {
+        for (let i = 0; i < 2; i++) { let sx, sy; do { sx = Math.floor(rng() * WIDTH); sy = Math.floor(rng() * HEIGHT); } while (map[sy][sx] !== '.' || enemies.some(e => e.x === sx && e.y === sy)); enemies.push({ id: 's' + (mapVersion * 50 + enemies.length) + '_' + i, x: sx, y: sy, type: 'z', el: ENEMIES['z'].el, name: '游魂', hp: 15, maxHp: 15, atk: 5, def: 0, exp: 5, gold: 3, isBoss: false, isElite: false, poison: 0 }); }
         log(`◈ ${enemy.name}分裂成2个游魂！`, 'log-combat');
       }
       if (enemy.hp <= 0) { const wasBoss = enemy.isBoss; slayEnemy(enemy, '被击败'); if (wasBoss && floor >= FINAL_FLOOR) { setTimeout(victory, 1000); return; } }
@@ -808,7 +839,7 @@
       if (!pick) return;
       enemy.usedSkill = true;
       if (pick === '喷火') { const d = Math.floor(enemy.atk * 1.2); deathBy = enemy.name + '喷火'; const applied = hurtPlayer(d, enemy.name); log(`▸ ${enemy.name}喷火！${applied}范围伤害！`, 'log-damage'); if (player.hp <= 0) gameOver(); }
-      else if (pick === '召唤') { let x, y; do { x = Math.floor(Math.random() * WIDTH); y = Math.floor(Math.random() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y)); enemies.push({ id: 'b' + mapVersion + '_' + enemies.length, x, y, type: 'z', el: ENEMIES['z'].el, name: '僵尸', hp: 20, maxHp: 20, atk: 5, def: 0, exp: 10, gold: 5, poison: 0, usedSkill: false }); log(`▸ ${enemy.name}召唤僵尸！`, 'log-skill'); }
+      else if (pick === '召唤') { let x, y; do { x = Math.floor(rng() * WIDTH); y = Math.floor(rng() * HEIGHT); } while (map[y][x] !== '.' || enemies.some(e => e.x === x && e.y === y)); enemies.push({ id: 'b' + mapVersion + '_' + enemies.length, x, y, type: 'z', el: ENEMIES['z'].el, name: '僵尸', hp: 20, maxHp: 20, atk: 5, def: 0, exp: 10, gold: 5, poison: 0, usedSkill: false }); log(`▸ ${enemy.name}召唤僵尸！`, 'log-skill'); }
       else if (pick === '诅咒') { player.cursed = true; log(`▸ ${enemy.name}施加诅咒！防御-30%！`, 'log-curse'); }
       updateJevChip();
     }
@@ -858,7 +889,7 @@
 
     function freeTileAt(minDist) {
       for (let t = 0; t < 200; t++) {
-        const x = Math.floor(Math.random() * WIDTH), y = Math.floor(Math.random() * HEIGHT);
+        const x = Math.floor(rng() * WIDTH), y = Math.floor(rng() * HEIGHT);
         if (map[y][x] !== '.' || (Math.abs(x - player.x) + Math.abs(y - player.y)) < minDist) continue;
         if (enemies.some(e => e.x === x && e.y === y) || items.some(i => i.x === x && i.y === y)) continue;
         return { x, y };
@@ -911,7 +942,7 @@
     }
     function openDraft() {
       const pool = GameData.SHA.slice(); const picks = [];
-      for (let i = 0; i < 3 && pool.length; i++) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      for (let i = 0; i < 3 && pool.length; i++) picks.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
       draftPending = true;
       const c = document.getElementById('draft-items'); c.innerHTML = '';
       picks.forEach(o => { const d = document.createElement('div'); d.className = 'shop-item';
@@ -986,9 +1017,9 @@
       if (player.class === '炼药师') { player.hp = Math.min(player.maxHp, player.hp + 15); log('◈ 炼丹回复15气血！', 'log-skill'); }
       if (player.mod.hp_leak && player.hp > 1) { player.hp = Math.max(1, player.hp - player.mod.hp_leak); log(`◈ 煞气侵蚀，气血 -${player.mod.hp_leak}`, 'log-curse'); }
       // 定风珠：免疫诅咒 —— 免疫的是这一整套，不只是精英技能
-      if (floor < FINAL_FLOOR && floor > 1 && !curse && !hasFx('noCurse') && Math.random() < 0.25) {
+      if (floor < FINAL_FLOOR && floor > 1 && !curse && !hasFx('noCurse') && rng() < 0.25) {
         const curses = { '血光': '受到的伤害 +20%', '灵气流失': '现存灵气 -30%', '道心不稳': '升级所需经验 +50%' };
-        const names = Object.keys(curses); curse = names[Math.floor(Math.random() * names.length)];
+        const names = Object.keys(curses); curse = names[Math.floor(rng() * names.length)];
         log(`⚠️ ${curse}：${curses[curse]}`, 'log-curse');
         if (curse === '灵气流失') player.gold = Math.floor(player.gold * 0.7);
         if (curse === '道心不稳') player.expTo = Math.floor(player.expTo * 1.5);
@@ -1024,7 +1055,7 @@
     function applyElder(k) { insight.ev('elder_choice', { pick: k, hp_ratio: +(player.hp / player.maxHp).toFixed(2), gold: player.gold });
       if (k === 'transmit') { player.atk += 3; log('◈ 老人传授功法，攻击+3！', 'log-item'); }
       else if (k === 'heal') { player.hp = Math.min(player.maxHp, player.hp + 50); log('◈ 老人施展神通，恢复50气血！', 'log-heal'); }
-      else if (Math.random() < 0.3) { if (hasFx('noCurse')) log('◈ 考验失败，但定风珠吹散了诅咒', 'log-heal'); else { curse = '道心不稳'; player.expTo = Math.floor(player.expTo * 1.5); log('◈ 考验失败！诅咒：道心不稳', 'log-curse'); } }
+      else if (rng() < 0.3) { if (hasFx('noCurse')) log('◈ 考验失败，但定风珠吹散了诅咒', 'log-heal'); else { curse = '道心不稳'; player.expTo = Math.floor(player.expTo * 1.5); log('◈ 考验失败！诅咒：道心不稳', 'log-curse'); } }
       else { player.gold += 50; log('◈ 考验通过！获得50灵气！', 'log-item'); }
       updateUI();
     }

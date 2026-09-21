@@ -11,6 +11,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BASE = "http://127.0.0.1:8731"
+WIDTH_CELLS = 375
 
 RESET = """(cls) => { playerClass = cls || '武痴'; tutOpen = false; elderPending = false; draftPending = false;
   document.getElementById('class-select').classList.add('hidden');
@@ -116,6 +117,36 @@ QI = """() => {
 }"""
 
 
+
+# 确定性重放：同 seed 两次进层必须逐字节相同，不同 seed 必须分叉。
+# 只验"页面上印了个种子"是不够的 —— 那正是最容易假装做到的事。
+FINGERPRINT = """() => ({
+  seed: RUN_SEED,
+  map: map.map(r => r.join('')).join('/'),
+  foes: enemies.map(e => e.type + e.x + ',' + e.y + '#' + e.hp).join('|'),
+  loot: items.map(i => (i.type === 'relic' ? i.id : i.type) + i.x + ',' + i.y).join('|'),
+  player: player.x + ',' + player.y
+})"""
+
+# DOM diff：节点必须被复用。若 render() 仍在全量 innerHTML 重建，标记会随旧节点一起消失
+DIFF = """() => {
+  updateUI();
+  const cells = document.querySelectorAll('#game i');
+  cells[7].__probe = 'kept';
+  const before = cells.length;
+  updateUI(); updateUI();
+  const after = document.querySelectorAll('#game i');
+  return { count: after.length, sameCount: after.length === before, reused: after[7].__probe === 'kept',
+           rebuilt: cells[7] !== after[7] };
+}"""
+
+
+def determinism(page, seed):
+    page.goto(f"{BASE}/?jev=local&seed={seed}", wait_until="load")
+    page.evaluate(RESET)
+    return page.evaluate(FINGERPRINT)
+
+
 def main() -> int:
     failures = []
     with sync_playwright() as p:
@@ -178,6 +209,27 @@ def main() -> int:
             failures.append(f"断链应当重开成 1 口而不是清零：{qi['broke']}")
         if qi["nullSafe"] != []:
             failures.append(f"无属性目标污染了链条：{qi['nullSafe']}")
+
+        det_a = determinism(page, "jin001")
+        det_b = determinism(page, "jin001")
+        det_c = determinism(page, "jin002")
+        print("同 seed 重放：", det_a["seed"], "map 相同 =", det_a["map"] == det_b["map"],
+              "| 敌人相同 =", det_a["foes"] == det_b["foes"], "| 掉落相同 =", det_a["loot"] == det_b["loot"])
+        if det_a["seed"] != "jin001":
+            failures.append(f"URL 上的 seed 没被采用，拿到的是 {det_a['seed']}")
+        for key in ("map", "foes", "loot", "player"):
+            if det_a[key] != det_b[key]:
+                failures.append(f"同 seed 但 {key} 不一致 —— 重放是假的")
+                break
+        if det_a["map"] == det_c["map"] and det_a["foes"] == det_c["foes"]:
+            failures.append("换 seed 地图与敌人完全一样 —— 生成根本没吃到种子")
+
+        diff = page.evaluate(DIFF)
+        print("DOM diff：", diff)
+        if not diff["reused"]:
+            failures.append("render() 仍在重建节点，DOM diff 没生效")
+        if diff["count"] != WIDTH_CELLS:
+            failures.append(f"格子数不对：{diff['count']}")
 
         if errs:
             failures.extend(f"页面错误: {e[:160]}" for e in errs[:5])

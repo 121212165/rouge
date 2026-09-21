@@ -1,0 +1,83 @@
+{
+  "round": 1,
+  "title": "第一轮：换成哪种架构",
+  "at": "2026-09-21T23:46:42.288Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 875,
+  "answers": {
+    "target_arch": "headless_rules",
+    "testability_gain": "1.08 / 4 档",
+    "ship_risk": "0.29 / 4 档",
+    "cost_vs_fun": "0.43",
+    "keep_zero_build": "0.54"
+  },
+  "confidence": {
+    "target_arch": 0.27,
+    "testability_gain": 0.1,
+    "ship_risk": 0.76
+  },
+  "raw": {
+    "target_arch": {
+      "type": "choice",
+      "choice": "headless_rules",
+      "confidence": 0.27,
+      "probabilities": {
+        "keep_as_is": 0.21,
+        "headless_rules": 0.36,
+        "esm_split": 0.34,
+        "ecs": 0,
+        "data_driven": 0,
+        "deterministic_first": 0.08,
+        "framework_build": 0,
+        "canvas_render": 0,
+        "reducer_state": 0.01
+      }
+    },
+    "testability_gain": {
+      "type": "score",
+      "score": 1.08,
+      "confidence": 0.1,
+      "legend": {
+        "0": "几乎无收益：规则仍然只能通过起浏览器间接验",
+        "1": "小收益：文件边界清楚了，但状态仍全局可变，单测要造大量前置",
+        "2": "中收益：核心结算可纯函数化，多数规则缺陷能在毫秒级被抓到",
+        "3": "大收益：规则层完全无 DOM 无随机，可枚举输入做表驱动测试",
+        "4": "决定性收益：配合确定性 RNG，可以整局回放并逐回合断言"
+      },
+      "probabilities": {
+        "0": 0.52,
+        "1": 0.15,
+        "2": 0.12,
+        "3": 0.15,
+        "4": 0.06
+      }
+    },
+    "ship_risk": {
+      "type": "score",
+      "score": 0.29,
+      "confidence": 0.76,
+      "legend": {
+        "0": "风险极高：触及全部代码，回归面等于整个游戏",
+        "1": "风险高：需要重连多处全局状态，现有 22 项闸门有失效风险",
+        "2": "风险中：局部搬迁，可分次提交并逐项复验",
+        "3": "风险低：只加边界不改行为，现有闸门原样复用",
+        "4": "几乎无风险：纯增量，不碰现有执行路径"
+      },
+      "probabilities": {
+        "0": 0.8,
+        "1": 0.15,
+        "2": 0.03,
+        "3": 0.01,
+        "4": 0.01
+      }
+    },
+    "cost_vs_fun": {
+      "type": "noul",
+      "noul": 0.43
+    },
+    "keep_zero_build": {
+      "type": "noul",
+      "noul": 0.54
+    }
+  }
+}

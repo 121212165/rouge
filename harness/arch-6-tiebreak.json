@@ -1,0 +1,65 @@
+{
+  "round": 6,
+  "title": "第六轮：两两对决（第一、二轮未收敛）+ 顺序问题",
+  "at": "2026-09-21T23:47:23.686Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 755,
+  "answers": {
+    "target_final": "headless_rules",
+    "migration_final": "strangler",
+    "do_now": "seed_and_diff",
+    "order_wrong": "0.68",
+    "seed_enables_safety": "0.80",
+    "big_bang_rejected": "0.81"
+  },
+  "confidence": {
+    "target_final": 0.62,
+    "migration_final": 0.74,
+    "do_now": 0.71
+  },
+  "raw": {
+    "target_final": {
+      "type": "choice",
+      "choice": "headless_rules",
+      "confidence": 0.62,
+      "probabilities": {
+        "esm_split": 0.16,
+        "keep_as_is": 0.09,
+        "headless_rules": 0.75
+      }
+    },
+    "migration_final": {
+      "type": "choice",
+      "choice": "strangler",
+      "confidence": 0.74,
+      "probabilities": {
+        "strangler": 0.87,
+        "golden_master": 0.13
+      }
+    },
+    "do_now": {
+      "type": "choice",
+      "choice": "seed_and_diff",
+      "confidence": 0.71,
+      "probabilities": {
+        "full_refactor": 0.03,
+        "ship_first": 0.06,
+        "seed_and_diff": 0.76,
+        "seed_only": 0.06,
+        "seed_then_rules": 0.09
+      }
+    },
+    "order_wrong": {
+      "type": "noul",
+      "noul": 0.68
+    },
+    "seed_enables_safety": {
+      "type": "noul",
+      "noul": 0.8
+    },
+    "big_bang_rejected": {
+      "type": "noul",
+      "noul": 0.81
+    }
+  }
+}

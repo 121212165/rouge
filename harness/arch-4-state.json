@@ -1,0 +1,67 @@
+{
+  "round": 4,
+  "title": "第四轮：状态与随机性模型",
+  "at": "2026-09-21T23:46:58.717Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 773,
+  "answers": {
+    "state_model": "seeded_rng",
+    "reproducible_bugs": "0.04 / 4 档",
+    "conflicts_death": "0.15",
+    "enables_balance_data": "0.14",
+    "refactor_dependency": "0.43"
+  },
+  "confidence": {
+    "state_model": 0.5,
+    "reproducible_bugs": 0.97
+  },
+  "raw": {
+    "state_model": {
+      "type": "choice",
+      "choice": "seeded_rng",
+      "confidence": 0.5,
+      "probabilities": {
+        "snapshot_save": 0.01,
+        "seeded_rng": 0.56,
+        "mutable_ok": 0.02,
+        "effect_queue": 0.01,
+        "immutable_reducer": 0.04,
+        "single_state": 0.04,
+        "command_log": 0.02,
+        "entity_behaviour": 0,
+        "step_engine": 0.3
+      }
+    },
+    "reproducible_bugs": {
+      "type": "score",
+      "score": 0.04,
+      "confidence": 0.97,
+      "legend": {
+        "0": "无法复现（现状：随机散落且无 seed）",
+        "1": "勉强：需要大量环境假设",
+        "2": "可以：需 seed + 指令流",
+        "3": "容易：仅需指令流",
+        "4": "完全：状态即数据，可直接载入"
+      },
+      "probabilities": {
+        "0": 0.98,
+        "1": 0.01,
+        "2": 0.01,
+        "3": 0,
+        "4": 0
+      }
+    },
+    "conflicts_death": {
+      "type": "noul",
+      "noul": 0.15
+    },
+    "enables_balance_data": {
+      "type": "noul",
+      "noul": 0.14
+    },
+    "refactor_dependency": {
+      "type": "noul",
+      "noul": 0.43
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "round": 2,
+  "title": "第二轮：怎么迁过去",
+  "at": "2026-09-21T23:46:43.073Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 414,
+  "answers": {
+    "migration": "strangler",
+    "rollback": "1.79 / 4 档",
+    "steps": "2.14 / 4 档",
+    "gate_integrity": "0.42",
+    "worth_it": "0.44"
+  },
+  "confidence": {
+    "migration": 0.29,
+    "rollback": 0,
+    "steps": 0.35
+  },
+  "raw": {
+    "migration": {
+      "type": "choice",
+      "choice": "strangler",
+      "confidence": 0.29,
+      "probabilities": {
+        "freeze_content": 0,
+        "tests_before_move": 0.14,
+        "new_repo": 0,
+        "parallel_flag": 0.09,
+        "ship_while_migrating": 0.01,
+        "golden_master": 0.3,
+        "vertical_slice": 0.09,
+        "big_bang": 0,
+        "strangler": 0.37
+      }
+    },
+    "rollback": {
+      "type": "score",
+      "score": 1.79,
+      "confidence": 0,
+      "legend": {
+        "0": "几乎不可回退：中间态无法运行",
+        "1": "难回退：需要 revert 大量交叉改动",
+        "2": "可回退：每步独立提交且各自可发布",
+        "3": "易回退：新旧并存，一行开关切回",
+        "4": "零风险：纯增量，不删旧路径"
+      },
+      "probabilities": {
+        "0": 0.2,
+        "1": 0.24,
+        "2": 0.22,
+        "3": 0.25,
+        "4": 0.09
+      }
+    },
+    "steps": {
+      "type": "score",
+      "score": 2.14,
+      "confidence": 0.35,
+      "legend": {
+        "0": "1 个大版本",
+        "1": "2-3 个",
+        "2": "4-6 个",
+        "3": "7-12 个",
+        "4": "12 个以上"
+      },
+      "probabilities": {
+        "0": 0.05,
+        "1": 0.22,
+        "2": 0.36,
+        "3": 0.28,
+        "4": 0.09
+      }
+    },
+    "gate_integrity": {
+      "type": "noul",
+      "noul": 0.42
+    },
+    "worth_it": {
+      "type": "noul",
+      "noul": 0.44
+    }
+  }
+}

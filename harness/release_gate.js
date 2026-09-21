@@ -12,7 +12,7 @@ const AS_JSON = argv.includes('--json');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const SIZE_BUDGET_KB = 220;
-const JS_FILES = ['jev/core.js', 'jev/questions.js', 'jev/policies.js', 'jev/client.js', 'jev/gamedata.js'];
+const JS_FILES = ['jev/core.js', 'jev/questions.js', 'jev/policies.js', 'jev/client.js', 'jev/gamedata.js', 'jev/rng.js'];
 const run = (cmd) => { try { return { ok: true, out: execSync(cmd, { cwd: ROOT, encoding: 'utf8' }) }; } catch (e) { return { ok: false, out: String(e.stdout || '') + String(e.stderr || e.message) }; } };
 const count = (src, re) => (src.match(re) || []).length;
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -44,8 +44,12 @@ function deterministicChecks() {
   const tutSteps = [...html.matchAll(/class="tut-step"[^>]*>([\s\S]*?)<\/div>/g)].map((m) => m[1]).join('\n');
   const legendBlock = (html.match(/const LEGEND = \[[\s\S]*?\n\s{4}\];/) || [''])[0];
   return [
-    { id: 'tests', what: '单元与控件校验（合法域/硬否决/门控/降级/复用）', ok: run('node --test tests/test_core.js').ok },
+    { id: 'tests', what: '单元与控件校验（合法域/硬否决/门控/降级/复用）', ok: run('node --test tests/test_core.js tests/test_gamedata.js tests/test_rng.js').ok },
     { id: 'gamedata', what: '数据表自洽（五行成圈 / 法宝字段 / 煞气必带代价）', ok: run('node --test tests/test_gamedata.js').ok },
+    // 架构议会第四~六轮：seeded_rng 0.56 / do_now=seed_and_diff 0.76。
+    // 光有 seed 不算做到，必须"同 seed 真能重放"，所以重放断言放在浏览器侧（check_mechanics）。
+    { id: 'determinism', what: '确定性重放与 DOM 复用（同 seed 逐字节一致 · 格子节点不被重建）', ok: run('py -3.12 harness/check_mechanics.py').ok },
+    { id: 'boot', what: '首屏能启动且一步能推进（内联脚本一崩就全崩，TDZ 已犯过两次）', ok: run('py -3.12 harness/check_boot.py').ok },
     { id: 'mechanics', what: '机制回归（法宝逐件生效 · 煞气三选 · 风险定价掉落）', ok: run('py -3.12 harness/check_mechanics.py').ok },
     { id: 'ablation', what: '夹具自检 + 离线消融可跑', ok: ablation.ok },
     { id: 'baseline_frozen', what: '消融基线未被顺手改坏（open_direct 仍第 5 回合）', ok: frozenBaseline },

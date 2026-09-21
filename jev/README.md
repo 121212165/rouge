@@ -249,6 +249,55 @@ Jev 在 `board_fit` 里给 landscape 的分很低（没进前三），所以这�
 随机地图几乎必然铺不出测试位 → `铺不出东/东北皆空地的测试位` 偶发失败（5 次里挂 1 次）。
 改成只要求那 2x2 本身是空地，连跑 5/5 稳定。
 
+## 架构议会：用户建议"重构换架构"，连判六轮
+
+`harness/arch_council.js --round=1..6`，每轮九个互斥选项，事实全部是本仓可复算的数字：
+内联脚本 839 行 / 90 个函数 / 172 个顶层可变绑定，`jev/` 模块化 499 行（**不可测的部分比可测的还多，1.7:1**），
+游戏规则的进程内单测覆盖 **0**，本会话 9 个真实缺陷里 **5 个**归因于"逻辑锁在内联 blob + 全局可变"。
+
+| 轮 | 问题 | 结论 | 置信 |
+|---|---|---|---|
+| 1 | target_arch | headless_rules 0.36 vs esm_split 0.34 vs **keep_as_is 0.21** | 0.27 ⚠未收敛 |
+| 1 | **ship_risk** | **0.29 / 4 档 = "风险极高：触及全部代码，回归面等于整个游戏"** | **0.76 决定性** |
+| 1 | cost_vs_fun | 0.43 —— 玩家能不能感觉到，是硬币 | — |
+| 2 | migration | strangler 0.37 vs golden_master 0.30 | 0.29 ⚠未收敛 |
+| 2 | worth_it | 0.44 —— 迁移净收益为正的把握不到一半 | — |
+| 3 | test_arch | **contract_gate 0.63**（保留浏览器闸门当真相），pure_rules_unit 只有 0.30 | 0.59 |
+| 4 | **state_model** | **seeded_rng 0.56**（step_engine 0.30、immutable_reducer 0.04） | 0.50 |
+| 4 | **reproducible_bugs** | **0.04 / 4 档 = "无法复现（现状：随机散落且无 seed）"** | **0.97 决定性** |
+| 4 | conflicts_death | 0.15 —— 加 seed 不违反"永久死亡无存档" | — |
+| 5 | render_arch | **dom_diff 0.51**（canvas_2d 0.30） | 0.44 |
+| 5 | ship_now | 0.67 —— 当前版本现在就能放给真人收数据 | — |
+| 6 | target_final | **headless_rules 0.75** | 0.62 ✓收敛 |
+| 6 | migration_final | **strangler 0.87** | 0.74 ✓收敛 |
+| 6 | do_now | **seed_and_diff 0.76**（full_refactor 未进前三，ship_first 0.06） | 0.71 ✓收敛 |
+| 6 | **big_bang_rejected** | **0.81 —— 一次性换架构被否** | — |
+| 6 | seed_enables_safety | 0.80 —— seed 是重构的**前置**，不是替代 | — |
+
+**判决与用户的建议相反**：不换架构、不做大重构。理由链是
+`ship_risk 0.29@0.76` + `big_bang_rejected 0.81` + `worth_it 0.44` + `ship_now 0.67`
+→ 现在动架构会把"收真人数据"这件事推迟，而数据才是当前唯一的瓶颈；
+但 `headless_rules 0.75` 是**认可的目标形态**，用 `strangler 0.87` 一块块抽，
+而第一步是 `seeded_rng`（0.56），因为 `seed_enables_safety 0.80`：
+**没有确定性 seed 就没有金样回放，没有金样回放的重构等于裸改。**
+
+本轮按判决做了 `do_now = seed_and_diff`：
+- `jev/rng.js`（mulberry32 + FNV hashSeed，5 项单测）替掉散落的 **40 处 `Math.random()`**；
+  `?seed=xxxxxx` 精确重放一局，seed 印在开局日志与诊断包首行，玩家报障自然带上来。
+- `render()` 从"每回合 375 个 `<i>` 全量 innerHTML 重建"改成**只重绘 key 变了的格子**，
+  节点复用（实测 `rebuilt: false`）。
+- 浏览器侧新增两条硬断言：**同 seed 的 map / 敌人 / 掉落 / 出生点逐字节一致**，
+  以及**换 seed 必须分叉**（否则生成根本没吃到种子）。
+
+**做这件事的过程中我自己复现了喂给 Jev 的那类 bug**：把 `let RUN_SEED = QS.get('seed')`
+写在 `QS` 声明之前 → 顶层 `let` 初始化器立刻执行 → TDZ → **整段内联脚本静默中止**，
+症状就是"游戏打不开但控制台什么都没有"。这正是第 2、3 个归因缺陷的同一形态，
+而且是在我记录过这个坑之后又踩的。所以闸门新增 `boot` 否决项：加载零 pageerror、
+375 格全部上色、有 seed、`rng()` 存在、按一步世界必须前进。
+
+顺带又抓到两处断言写错（都是"测试比被测物更不可信"那一类）：`check_boot` 先被首访教程
+吃掉按键（第三次踩同一个坑），再拿"日志变长"当回合推进的判据 —— 安静走一步本来就不产生日志。
+
 ## 已知边界（别当成已验证）
 
 - 真模型（`JEV_UPSTREAM=typesafe`，实测 `jev-1.13.0`）在 7 条夹具上**与 `local` 贴脸回合数完全一致**：答案已在 state 内时，模型相对确定性启发式的边际增益为 0。实测代价 p50 479–550 ms、最差 1988 ms、约 700–900 输入 token/次，整轮消融约 17.8 万输入 token。
@@ -266,7 +315,7 @@ Jev 在 `board_fit` 里给 landscape 的分很低（没进前三），所以这�
 ## 怎么跑
 
 ```bash
-node --test tests/test_core.js tests/test_gamedata.js   # 无网络、无模型，验真实控件与数据表
+node --test tests/test_core.js tests/test_gamedata.js tests/test_rng.js   # 无网络无模型，验控件、数据表与确定性
 node harness/run_ablation.js --policies=off,local
 JEV_UPSTREAM=stub py -3.12 jev_bridge.py        # 起桥（同进程兼作静态服务器）
 node harness/run_ablation.js --policies=off,local,bridge
@@ -277,6 +326,8 @@ py -3.12 harness/play_batch.py 12               # 机器人试玩，写 harness/
 py -3.12 harness/shot.py play                   # 桌面 + 390 窄屏截图，附带网格对齐自检
 node harness/design_council.js --round=2         # 可玩性：招牌玩法与美术方向
 node harness/design_council.js --round=3         # 两两对决打破第二轮的硬币正面
+node harness/arch_council.js --round=1..6    # 架构议会：换不换架构、怎么迁、靠什么验（每轮 9 选项）
+py -3.12 harness/check_boot.py                 # 首屏能否启动（内联脚本一崩就全崩）
 node harness/release_gate.js                    # 18 项确定性否决全绿才问 Jev 判模糊维度
 # 浏览器： http://127.0.0.1:8731/?jev=bridge    按 J 切档
 ```

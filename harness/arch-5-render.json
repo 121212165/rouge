@@ -1,0 +1,88 @@
+{
+  "round": 5,
+  "title": "第五轮：渲染架构（素材已经来了）",
+  "at": "2026-09-21T23:46:59.310Z",
+  "model": "jev-1.13.0",
+  "latency_ms": 352,
+  "answers": {
+    "render_arch": "dom_diff",
+    "perf_headroom": "1.76 / 4 档",
+    "legibility_risk": "0.29",
+    "fx_payoff": "0.33",
+    "final_verdict": "2.84 / 4 档",
+    "ship_now": "0.67"
+  },
+  "confidence": {
+    "render_arch": 0.44,
+    "perf_headroom": 0.02,
+    "final_verdict": 0.03
+  },
+  "raw": {
+    "render_arch": {
+      "type": "choice",
+      "choice": "dom_diff",
+      "confidence": 0.44,
+      "probabilities": {
+        "webgl_pixi": 0,
+        "hybrid_layers": 0.05,
+        "offscreen_worker": 0,
+        "canvas_2d": 0.3,
+        "dom_diff": 0.51,
+        "fx_layer_only": 0.1,
+        "keep_dom_grid": 0.03,
+        "sprites_in_cells": 0.01,
+        "responsive_board": 0
+      }
+    },
+    "perf_headroom": {
+      "type": "score",
+      "score": 1.76,
+      "confidence": 0.02,
+      "legend": {
+        "0": "无余量，当前已接近上限",
+        "1": "小",
+        "2": "中",
+        "3": "大",
+        "4": "基本不是瓶颈了"
+      },
+      "probabilities": {
+        "0": 0.21,
+        "1": 0.3,
+        "2": 0.17,
+        "3": 0.17,
+        "4": 0.15
+      }
+    },
+    "legibility_risk": {
+      "type": "noul",
+      "noul": 0.29
+    },
+    "fx_payoff": {
+      "type": "noul",
+      "noul": 0.33
+    },
+    "final_verdict": {
+      "type": "score",
+      "score": 2.84,
+      "confidence": 0.03,
+      "legend": {
+        "0": "净负：会引入新缺陷且玩家无感",
+        "1": "接近零",
+        "2": "小正",
+        "3": "明确正",
+        "4": "显著正：不做会成为后续内容扩张的瓶颈"
+      },
+      "probabilities": {
+        "0": 0.12,
+        "1": 0.08,
+        "2": 0.09,
+        "3": 0.25,
+        "4": 0.46
+      }
+    },
+    "ship_now": {
+      "type": "noul",
+      "noul": 0.67
+    }
+  }
+}
