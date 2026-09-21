@@ -88,6 +88,17 @@
     @keyframes shake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-3px,2px); }
       40% { transform: translate(3px,-2px); } 60% { transform: translate(-2px,-2px); } 80% { transform: translate(2px,2px); } }
     #game.shake { animation: shake .3s steps(2, end); }
+    /* 一气连环的引爆特效：Jev 判 verb_final_clear 只有 0.18，这一步就是给它一张脸 */
+    .qi-fx { position: fixed; z-index: 68; pointer-events: none; opacity: 0;
+      background: url('assets/fx-qiburst.png') center/contain no-repeat; image-rendering: pixelated;
+      filter: drop-shadow(0 0 16px rgba(255, 215, 94, .65)); }
+    .qi-fx.play { animation: qiFx .58s ease-out; }
+    @keyframes qiFx { 0% { opacity: 0; transform: scale(.35) rotate(-22deg); }
+      32% { opacity: 1; } 100% { opacity: 0; transform: scale(1.55) rotate(14deg); } }
+    .legend .lg-art { width: 30px; height: 30px; vertical-align: middle; margin-right: 3px;
+      image-rendering: pixelated; }
+    .relic-ico { width: 22px; height: 22px; vertical-align: -5px; margin-right: 4px; image-rendering: pixelated; }
+    h1 .seal { width: 30px; height: 30px; vertical-align: -4px; margin-right: 9px; image-rendering: pixelated; }
     .rarity-common { color: #b8c0d8; } .rarity-uncommon { color: var(--green); } .rarity-rare { color: var(--cyan); }
     .modal { position: fixed; inset: 0; background: rgba(4,6,14,0.94); display: flex; flex-direction: column;
       align-items: center; justify-content: center; justify-content: safe center; padding: 20px; z-index: 100; overflow-y: auto; }
@@ -190,7 +201,7 @@
   </style>
 </head>
 <body>
-  <h1>☯ 阴阳道</h1>
+  <h1><img class="seal" src="assets/title-seal.png" alt="" onerror="this.remove()">阴阳道</h1>
   <div class="game-container">
     <div class="map-col">
       <div id="game"></div>
@@ -231,6 +242,7 @@
     </div>
   </div>
   <div class="controls"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 | <kbd>1</kbd><kbd>2</kbd> 技能 | <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 法宝 | 手机：按住地图出罗盘 | <kbd>R</kbd> 重新开始 | <kbd>F</kbd> 反馈 | <kbd>H</kbd> 教程 <button class="inline-btn" onclick="openFeedback()">提交反馈与诊断</button> <span id="jev-chip" style="color:#a78bfa"></span></div>
+  <div class="qi-fx" id="qi-fx"></div>
   <div class="compass" id="compass"><div class="c-ring"></div><div class="c-hub">待</div></div>
   <div class="touch-bar" id="touch-bar"></div>
   <div id="tut-modal" class="modal hidden">
@@ -323,6 +335,11 @@
       '◈': { g: '◈', fg: '#0b1020', bg: '#86efac' }, '◆': { g: '◆', fg: '#0b1020', bg: '#7dd3fc' }, '❖': { g: '❖', fg: '#0b1020', bg: '#ffd75e' },
     };
     const RELIC_GLYPH = { 1: '◈', 2: '◆', 3: '❖' };
+    /* 素材只用在不与"格子可读性"抢位置的地方：引爆特效、图例敌人立绘（34px 才分得清）、
+       法宝图标、标题印。豆包出的 128px 精灵缩到 14px 会糊成一团，所以地图格子里仍然用字形。 */
+    const ART = { z: 'enemy-jiangshi.png', g: 'enemy-duchong.png', s: 'enemy-shashi.png', D: 'enemy-hanba.png',
+      E: 'enemy-wangliang.png', F: 'enemy-youhun.png', G: 'enemy-dunwei.png' };
+    const artImg = (src, cls) => `<img class="${cls}" src="assets/${src}" alt="" onerror="this.remove()">`;
     const ENEMIES = {
       'z': { name: '僵尸', el: '土', hp: 25, atk: 6, def: 0, exp: 15, gold: 8 },
       'g': { name: '毒虫', el: '木', hp: 35, atk: 10, def: 3, exp: 25, gold: 15 },
@@ -378,7 +395,8 @@
       const s = tileStyle(ch);
       const ring = s.ring ? `box-shadow:inset 0 0 0 2px ${s.ring};` : '';
       const pad = s.bg === 'transparent' ? '' : 'padding:0 3px;border-radius:2px;';
-      return `<span class="lg-k" style="color:${s.fg};background:${s.bg};${pad}${ring}">${s.g}</span><span class="lg-v">${label}</span>`;
+      const art = ART[ch] ? artImg(ART[ch], 'lg-art') : '';
+      return `${art}<span class="lg-k" style="color:${s.fg};background:${s.bg};${pad}${ring}">${s.g}</span><span class="lg-v">${label}</span>`;
     }
     const LEGEND_KEY = 'yinyang.legend.folded';
     function legendFoldedDefault() { return matchMedia('(max-width: 768px)').matches; }
@@ -670,12 +688,23 @@
       const hit = enemies.filter(o => o !== enemy && Math.abs(o.x - enemy.x) + Math.abs(o.y - enemy.y) <= 2);
       enemy.hp -= boom;
       hit.forEach(o => { o.hp -= Math.floor(boom * 0.6); });
-      flashMap(el);
+      flashMap(el); showQiFx(enemy.x, enemy.y);
       log(`◈ ✦一气连环·${el}✦ ${boom} 爆发，波及 ${hit.length} 敌`, 'log-skill');
       insight.ev('qi_burst', { el, dmg: boom, splash: hit.length, floor, chain: GameData.QI_NEED });
       hit.forEach(o => { if (o.hp <= 0) slayEnemy(o, '被一气连环扫灭'); });
       if (enemy.hp <= 0) slayEnemy(enemy, '被一气连环击穿');
       return true;
+    }
+    function showQiFx(cx, cy) {
+      const el = document.getElementById('qi-fx'), g = document.getElementById('game');
+      if (!el || !g) return;
+      const r = g.getBoundingClientRect(), inset = 8;
+      const cw = (r.width - inset * 2) / WIDTH, chh = (r.height - inset * 2) / HEIGHT;
+      const size = Math.max(110, cw * 8);
+      el.style.width = el.style.height = size + 'px';
+      el.style.left = (r.left + inset + (cx + 0.5) * cw - size / 2) + 'px';
+      el.style.top = (r.top + inset + (cy + 0.5) * chh - size / 2) + 'px';
+      el.classList.remove('play'); void el.offsetWidth; el.classList.add('play');
     }
     function flashMap(el) {
       const g = document.getElementById('game'); if (!g) return;
@@ -855,7 +884,7 @@
     function renderRelics() {
       const c = document.getElementById('relics-list'); if (!c) return;
       const act = player.bag.map((b, i) => { const r = GameData.relic(b.id);
-        return `<button class="relic-btn" onclick="useRelic('${r.id}')"><b>${'ZXCVBNM'[i] || '#'}</b> ${r.name} <span class="skill-cost">×${b.charges}</span><br><span style="color:#8a93ad">${r.desc}</span></button>`; }).join('');
+        return `<button class="relic-btn" onclick="useRelic('${r.id}')">${artImg('relic-' + r.id + '.png', 'relic-ico')}<b>${'ZXCVBNM'[i] || '#'}</b> ${r.name} <span class="skill-cost">×${b.charges}</span><br><span style="color:#8a93ad">${r.desc}</span></button>`; }).join('');
       const pas = player.passive.map(id => { const r = GameData.relic(id); return `<span class="relic-pass" title="${r.desc}">${r.name}</span>`; }).join('');
       c.innerHTML = (act || '<p class="hint">主动法宝：掉在危险处的 ◈ ◆ ❖</p>') + (pas ? `<div class="relic-passes">被动：${pas}</div>` : '');
       const el = document.getElementById('element-badge');

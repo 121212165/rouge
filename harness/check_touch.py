@@ -18,11 +18,14 @@ START = """() => {
 # 把玩家挪到"东与东北都是空地"的格子上，并把敌人清出可达范围：
 # 往墙上拖本来就不该动，不铺这个场景等于让测试拿随机地图赌
 CLEAR = """() => {
-  for (let y = 1; y < HEIGHT - 2; y++) for (let x = 1; x < WIDTH - 2; x++) {
-    if (map[y][x] !== '.' || map[y][x + 1] !== '.' || map[y - 1][x] !== '.' || map[y - 1][x + 1] !== '.') continue;
-    if (items.some(i => i.x === x || i.x === x + 1 || i.y === y || i.y === y - 1)) continue;
+  const free = (x, y) => map[y][x] === '.' && !items.some(i => i.x === x && i.y === y);
+  for (let y = 1; y < HEIGHT - 1; y++) for (let x = 1; x < WIDTH - 2; x++) {
+    // 只要求这 2x2 本身是空地：先前写成"整行整列不许有掉落物"，
+    // 随机地图几乎必然被否掉，测试就变成偶发失败
+    if (!free(x, y) || !free(x + 1, y) || !free(x, y - 1) || !free(x + 1, y - 1)) continue;
+    if (map[y - 1][x] === '#' || map[y][x + 1] === '#') continue;
     player.x = x; player.y = y;
-    enemies.forEach((e, k) => { e.x = (x + 4 + k * 2) % (WIDTH - 1) + 1; e.y = (y + 5 + k) % (HEIGHT - 1) + 1; });
+    enemies.forEach((e, k) => { e.x = (x + 5 + k * 2) % (WIDTH - 1) + 1; e.y = (y + 6 + k) % (HEIGHT - 1) + 1; });
     return { x, y };
   }
   return null;

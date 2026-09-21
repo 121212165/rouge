@@ -17,6 +17,19 @@ const run = (cmd) => { try { return { ok: true, out: execSync(cmd, { cwd: ROOT, 
 const count = (src, re) => (src.match(re) || []).length;
 const round2 = (n) => Math.round(n * 100) / 100;
 
+// index.html 里出现的 assets/<file>.png 必须真实存在。法宝图标是按 relic id 拼出来的，
+// 只从 RELICS 数组里取 id —— 早先版本连 SHA（煞气）的 id 也扫进去了，凭空报出 8 个"缺图"。
+function referencedAssets(html) {
+  const set = new Set([...html.matchAll(/assets\/([A-Za-z0-9._-]+\.png)/g)].map((m) => m[1]));
+  const gd = read('jev/gamedata.js');
+  const relics = (gd.match(/const RELICS = \[([\s\S]*?)\n {2}\];/) || ['', ''])[1];
+  for (const m of relics.matchAll(/id: '([a-z]+)'/g)) set.add(`relic-${m[1]}.png`);
+  return [...set];
+}
+function missingAssets(html) {
+  return referencedAssets(html).filter((n) => !fs.existsSync(path.join(ROOT, 'assets', n)));
+}
+
 function loadBalance() { try { return JSON.parse(read('harness/balance.json')); } catch (e) { return null; } }
 
 function deterministicChecks() {
@@ -50,6 +63,8 @@ function deterministicChecks() {
     { id: 'win_lose_paths', what: '有通关与死亡两条终局', ok: /function victory/.test(html) && /function gameOver/.test(html) },
     { id: 'skill_keys', what: '技能有键盘入口（1/2 绑定 castSkill）', ok: /k === '1' \|\| k === '2'/.test(html) },
     { id: 'relic_keys', what: '法宝有键盘入口（RELIC_KEYS 绑定 useRelic）', ok: /const RELIC_KEYS/.test(html) && /useRelic\(slot\.id\)/.test(html) },
+    // 素材是外部生成的，最容易出的问题是"代码引用了一张没交付的图"——浏览器只会在控制台 404。
+    { id: 'assets_present', what: `引用的素材都在盘上（缺 ${missingAssets(html).join(' ') || '无'}）`, ok: missingAssets(html).length === 0 },
     { id: 'readability_sync', what: `新机制同步进图例与教程（图例缺 ${['◈', '◆', '❖'].filter((g) => !legendBlock.includes(g)).join('') || '无'}；教程缺 ${['五行', '法宝', '煞气'].filter((w) => !tutSteps.includes(w)).join('') || '无'}）`, ok: ['◈', '◆', '❖'].every((g) => legendBlock.includes(g)) && ['五行', '法宝', '煞气'].every((w) => tutSteps.includes(w)) },
     { id: 'interactions', what: '浏览器交互回归（长老三选 / 购买上报 / 死亡单次结算 / 终局可达）', ok: run('py -3.12 harness/check_interactions.py').ok },
     { id: 'input_responsive', what: balance ? `判断层不阻塞输入（按键被吞率 ${balance.input_blocked_pct}%）` : '判断层不阻塞输入（缺 balance.json）', ok: !!balance && typeof balance.input_blocked_pct === 'number' && balance.input_blocked_pct < 1 },
